@@ -67,15 +67,33 @@ tl.weight.data = weight.clone()
 fc.bias.data = bias.clone()
 tl.bias.data = bias.clone()
 
+###########################################
+# Timing
+###########################################
+t1 = time.perf_counter()
 y1 = fc(x1)
+t2 = time.perf_counter()
+t1 = t2 - t1
 # y2 = tl(x2.to_mkldnn())
+t3 = time.perf_counter()
 y2 = tl(x2)
+t4 = time.perf_counter()
+t2 = t4 - t3
+###########################################
 #y2 = y2.to_dense()
 z1 = y1.mean()
 z2 = y2.mean()
 
 print("xsmm: {}".format(z1))
 print("ref: {}".format(z2))
+
+###########################################
+# Timing prints
+###########################################
+print("\nForward Pass Total Timing")
+print(f"xsmm time: {t1} s")
+print(f" ref time: {t2} s")
+###########################################
 
 if not y1.allclose(y2, rtol=1e-4, atol=1e-4):
     print("forward pass invalid")
@@ -85,8 +103,19 @@ if not y1.allclose(y2, rtol=1e-4, atol=1e-4):
     print("xsmm")
     print(y1)
 
+###########################################
+# Timing
+###########################################
+t4 = time.perf_counter()
 z1.backward()
+t5 = time.perf_counter()
+t3 = t5 - t4
+
+t5 = time.perf_counter()
 z2.backward()
+t6 = time.perf_counter()
+t4 = t6 - t5
+###########################################
 
 
 # Testing input grad
@@ -101,6 +130,13 @@ if not x1.grad.allclose(x2.grad, rtol=1e-6, atol=1e-6):
 
 print("xsmm: {}".format(x1.grad.mean()))
 print("ref: {}".format(x2.grad.mean()))
+###########################################
+# Timing prints
+###########################################
+print("\nBackward Pass Total Timing")
+print(f"xsmm time: {t3} s")
+print(f" ref time: {t4} s")
+###########################################
 
 # Testing weight grad
 weight_mask = (weight != 0.0).float()

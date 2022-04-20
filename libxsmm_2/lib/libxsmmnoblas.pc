@@ -1,0 +1,12 @@
+Name: libxsmm/noblas
+Description: LIBXSMM substituted LAPACK/BLAS dependency
+URL: https://github.com/libxsmm/libxsmm/
+Version: 1.17.0
+
+prefix=/home/kaotixs/libxsmm_project/libxsmm_2
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Requires: libxsmm
+Cflags: -I${includedir}
+Libs: -L${libdir} -lxsmmnoblas

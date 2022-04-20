@@ -1,0 +1,11 @@
+Name: libxsmm
+Description: Matrix operations and deep learning primitives
+URL: https://github.com/libxsmm/libxsmm/
+Version: 1.17.0
+
+prefix=/home/kaotixs/libxsmm_project/libxsmm_2
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Cflags: -I${includedir}
+Libs: -L${libdir} -lxsmm -lpthread -lrt -ldl -lm -lc

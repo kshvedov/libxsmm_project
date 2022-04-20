@@ -861,8 +861,12 @@ at::Tensor mlp_sparse_update(
 
   int nb = 16; // or 32
 
+  /* # # # # # BUG # # # # # */
+  // Times test required
   /* Declare return variables */
-  auto grad_weight = at::empty(weight.sizes(), weight.options());
+  //auto grad_weight = at::empty(weight.sizes(), weight.options());
+  auto grad_weight = at::zeros(weight.sizes(), weight.options());
+  /* # # # # # # # # # # # # */
 
   /* Used throughout this function */
   libxsmm_gemm_prefetch_type prefetch = LIBXSMM_GEMM_PREFETCH_NONE;

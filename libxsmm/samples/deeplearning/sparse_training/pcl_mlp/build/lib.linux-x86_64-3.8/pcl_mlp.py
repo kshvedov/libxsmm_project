@@ -35,7 +35,7 @@ class XsmmFC(Function):
         print("Inside XsmmFCForward")
         ##################################
         # Timing
-        t1 = time.perf_counter()
+        #t1 = time.perf_counter()
         ##################################
 
         input = input.contiguous()
@@ -44,7 +44,10 @@ class XsmmFC(Function):
 
         if use_sparse_kernels:
             print("Using SPARSE kernels for forward pass")
+            t1 = time.perf_counter()
             output = pcl_mlp_ext.sparse_forward(handle.handle, input, weight, bias)
+            t2 = time.perf_counter()
+            print(f"Sparse fwd exec time: {t2 - t1}")
 
             # For later backward pass
             XsmmFC.use_sparse_kernels = True
@@ -53,9 +56,9 @@ class XsmmFC(Function):
             output = pcl_mlp_ext.forward(handle.handle, input, weight, bias)
         
         ##################################
-        t2 = time.perf_counter()
-        print("XsmmFCFWD: q=%.3f" % ((t2-t1)*1000.0))
-        print(f"XsmmFCFWD: {t2-t1} s")
+        #t2 = time.perf_counter()
+        #print("XsmmFCFWD: q=%.3f" % ((t2-t1)*1000.0))
+        #print(f"XsmmFCFWD: {t2-t1} s")
         ##################################
 
         ctx.xsmm_handle = handle
@@ -70,23 +73,30 @@ class XsmmFC(Function):
         input, weight = ctx.saved_variables
         ##################################
         # Timing
-        t1 = time.perf_counter()
+        #t1 = time.perf_counter()
         ##################################
         grad_output = grad_output.contiguous()
 
         if XsmmFC.use_sparse_kernels:
             print("Using SPARSE kernels for backward pass")
+
+            t1 = time.perf_counter()
             grad_input = pcl_mlp_ext.sparse_backward(
                 grad_output,
                 input,
                 weight
             )
+            t2 = time.perf_counter()
+            print(f"Sparse bwd exec time: {t2 - t1}")
 
+            t3 = time.perf_counter()
             grad_weight = pcl_mlp_ext.sparse_update(
                 grad_output,
                 input,
                 weight
             )
+            t4 = time.perf_counter()
+            print(f"Sparse bwd update exec time: {t4 - t3}")
 
             grad_bias = grad_output.sum(axis=0)
         else:
@@ -94,9 +104,9 @@ class XsmmFC(Function):
             grad_input, grad_weight, grad_bias = pcl_mlp_ext.backward(handle.handle, grad_output, input, weight)
 
         ##################################
-        t2 = time.perf_counter()
-        print("XsmmFCBWD: q=%.3f" % ((t2-t1)*1000.0))
-        print(f"XsmmFCBWD: {t2-t1} s")
+        #t2 = time.perf_counter()
+        #print("XsmmFCBWD: q=%.3f" % ((t2-t1)*1000.0))
+        #print(f"XsmmFCBWD: {t2-t1} s")
         ##################################
 
         return (grad_input, grad_weight, grad_bias, None, None)

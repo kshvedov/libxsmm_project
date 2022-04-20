@@ -4,6 +4,7 @@
 #include <ATen/record_function.h>
 #include <torch/csrc/autograd/VariableTypeUtils.h>
 
+#include "time.h"
 #include <vector>
 #include <iostream>
 #ifdef _OPENMP
@@ -816,8 +817,13 @@ at::Tensor mlp_sparse_update(
   /* # # # # # BUG # # # # # */
   // Times test required
   /* Declare return variables */
-  //auto grad_weight = at::empty(weight.sizes(), weight.options());
+  clock_t start, end;
+  double cpu_time_used;
   auto grad_weight = at::zeros(weight.sizes(), weight.options());
+  //auto grad_weight = at::empty(weight.sizes(), weight.options());
+  end = clock();
+  cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+  printf("\nInit time\n: %lf", cpu_time_used);
   /* # # # # # # # # # # # # */
 
   /* Used throughout this function */
