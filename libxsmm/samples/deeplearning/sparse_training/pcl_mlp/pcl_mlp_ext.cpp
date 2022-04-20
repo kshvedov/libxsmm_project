@@ -813,8 +813,12 @@ at::Tensor mlp_sparse_update(
   printf("weight shape: (%d, %d)\n", C, K);
   printf("grad_output shape: (%d, %d)\n", N, K);
 
+  /* # # # # # BUG # # # # # */
+  // Times test required
   /* Declare return variables */
-  auto grad_weight = at::empty(weight.sizes(), weight.options());
+  //auto grad_weight = at::empty(weight.sizes(), weight.options());
+  auto grad_weight = at::zeros(weight.sizes(), weight.options());
+  /* # # # # # # # # # # # # */
 
   /* Used throughout this function */
   libxsmm_gemm_prefetch_type prefetch = LIBXSMM_GEMM_PREFETCH_NONE;

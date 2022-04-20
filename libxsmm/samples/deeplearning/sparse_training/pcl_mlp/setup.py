@@ -3,7 +3,7 @@ from setuptools import setup
 from torch.utils.cpp_extension import CppExtension, BuildExtension
 
 # Surface
-#LIBXSMM_ROOT_PATH="/home/kaotixs/libxsmm_project/libxsmm/"
+LIBXSMM_ROOT_PATH="/home/kaotixs/libxsmm_project/libxsmm/"
 
 # Azure
 #LIBXSMM_ROOT_PATH="/home/kshvedov/thesis/libxsmm_project/libxsmm/"

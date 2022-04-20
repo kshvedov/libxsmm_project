@@ -1,3 +1,4 @@
+import time
 import math
 import torch
 from torch import nn
@@ -31,8 +32,12 @@ class XsmmFC(Function):
 
     @staticmethod
     def forward(ctx, input, weight, bias, handle, use_sparse_kernels=False):
-        #print("Inside XsmmFCForward")
-        #t1 = time.time()
+        print("Inside XsmmFCForward")
+        ##################################
+        # Timing
+        t1 = time.perf_counter()
+        ##################################
+
         input = input.contiguous()
         weight = weight.contiguous()
         bias = bias.contiguous()
@@ -46,19 +51,27 @@ class XsmmFC(Function):
         else:
             print("Using DENSE kernels for forward pass")
             output = pcl_mlp_ext.forward(handle.handle, input, weight, bias)
-        #t2 = time.time()
-        #print("XsmmFCFWD: q=%.3f" % ((t2-t1)*1000.0))
+        
+        ##################################
+        t2 = time.perf_counter()
+        print("XsmmFCFWD: q=%.3f" % ((t2-t1)*1000.0))
+        print(f"XsmmFCFWD: {t2-t1} s")
+        ##################################
+
         ctx.xsmm_handle = handle
         ctx.save_for_backward(input, weight)
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
-        #print("Inside XsmmFCBackward")
+        print("Inside XsmmFCBackward")
         handle = ctx.xsmm_handle
         del ctx.xsmm_handle
         input, weight = ctx.saved_variables
-        #t1 = time.time()
+        ##################################
+        # Timing
+        t1 = time.perf_counter()
+        ##################################
         grad_output = grad_output.contiguous()
 
         if XsmmFC.use_sparse_kernels:
@@ -79,6 +92,12 @@ class XsmmFC(Function):
         else:
             print("Using DENSE kernels for backward pass")
             grad_input, grad_weight, grad_bias = pcl_mlp_ext.backward(handle.handle, grad_output, input, weight)
+
+        ##################################
+        t2 = time.perf_counter()
+        print("XsmmFCBWD: q=%.3f" % ((t2-t1)*1000.0))
+        print(f"XsmmFCBWD: {t2-t1} s")
+        ##################################
 
         return (grad_input, grad_weight, grad_bias, None, None)
 
