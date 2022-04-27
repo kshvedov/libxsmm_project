@@ -5,6 +5,7 @@
 #include <torch/csrc/autograd/VariableTypeUtils.h>
 
 #include "time.h"
+#include <stdio.h>
 #include <vector>
 #include <iostream>
 #ifdef _OPENMP
@@ -817,15 +818,20 @@ at::Tensor mlp_sparse_update(
   /* # # # # # BUG # # # # # */
   // Times test required
   /* Declare return variables */
-  clock_t start, end;
+  /*clock_t start, end;
   double cpu_time_used;
+  start = clock();*/
   auto grad_weight = at::zeros(weight.sizes(), weight.options());
   //auto grad_weight = at::empty(weight.sizes(), weight.options());
-  end = clock();
+  /*end = clock();
   cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
   printf("\nInit time\n: %lf", cpu_time_used);
+  FILE *fp;
+  fp = fopen("bug_timing.txt", "a");
+  fprintf(fp, "%lf\n", cpu_time_used);
+  fclose(fp);*/
   /* # # # # # # # # # # # # */
-
+  
   /* Used throughout this function */
   libxsmm_gemm_prefetch_type prefetch = LIBXSMM_GEMM_PREFETCH_NONE;
   int flags = LIBXSMM_GEMM_FLAGS('N', 'N');

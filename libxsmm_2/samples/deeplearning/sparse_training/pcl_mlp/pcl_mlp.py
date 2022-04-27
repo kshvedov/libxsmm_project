@@ -1,12 +1,12 @@
+import time
 import math
 import torch
 from torch import nn
+from torch.nn.utils import prune
 from torch.nn.parameter import Parameter
 from torch.nn import init
 from torch.autograd import Function
 import pcl_mlp_ext
-
-import time
 
 class XsmmHandle:
     def __init__(self, N, C, K, bn, bc, bk, dtype, fuse_bias, act_type):
@@ -28,58 +28,25 @@ class XsmmHandle:
             self.handle = None
             self.relu_mask_tensor = None
 
-class XsmmDescriptor:
-    def __init__(self, N, C, K, bn, bc, bk, nb):
-        self.desc = pcl_mlp_ext.create_descriptor(N, C, K, bn, bc, bk, nb)
-
-    def __del__(self):
-        if self.desc:
-            self.desc = None
-
-class XsmmCodePointer:
-    def __init__(self, desc, weight, pass_type="FWD"):
-        if pass_type == "FWD":
-            self.code_pointer = pcl_mlp_ext.create_code_pointer(desc.desc, weight, 0)
-        elif pass_type == "BWD":
-            self.code_pointer = pcl_mlp_ext.create_code_pointer(desc.desc, weight, 1)
-        elif pass_type == "UPD":
-            self.code_pointer = pcl_mlp_ext.create_code_pointer(desc.desc, weight, 2)
-
-    def __del__(self):
-        pass
-        """
-        if self.code_pointer:
-            print(self.code_pointer)
-            pcl_mlp_ext.destroy_code_pointer(self.code_pointer)
-            self.code_pointer = None
-        """
-
 class XsmmFC(Function):
     use_sparse_kernels = False
 
     @staticmethod
-    def forward(ctx, input, weight, bias, handle, code_pointer, use_sparse_kernels):
+    def forward(ctx, input, weight, bias, handle, use_sparse_kernels=False):
         print("Inside XsmmFCForward")
         ##################################
         # Timing
-        t1 = time.perf_counter()
+        #t1 = time.perf_counter()
         ##################################
+
         input = input.contiguous()
         weight = weight.contiguous()
         bias = bias.contiguous()
 
         if use_sparse_kernels:
             print("Using SPARSE kernels for forward pass")
-
-            """
-            output = pcl_mlp_ext.sparse_forward(handle.handle, input, weight, bias)
-            """
             t1 = time.perf_counter()
-            output = pcl_mlp_ext.execute_sparse_fwd(
-                    code_pointer.code_pointer,
-                    input,
-                    weight,
-                    bias)
+            output = pcl_mlp_ext.sparse_forward(handle.handle, input, weight, bias)
             t2 = time.perf_counter()
             print(f"Sparse fwd exec time: {t2 - t1}")
 
@@ -88,7 +55,7 @@ class XsmmFC(Function):
         else:
             print("Using DENSE kernels for forward pass")
             output = pcl_mlp_ext.forward(handle.handle, input, weight, bias)
-
+        
         ##################################
         #t2 = time.perf_counter()
         #print("XsmmFCFWD: q=%.3f" % ((t2-t1)*1000.0))
@@ -113,6 +80,7 @@ class XsmmFC(Function):
 
         if XsmmFC.use_sparse_kernels:
             print("Using SPARSE kernels for backward pass")
+
             t1 = time.perf_counter()
             grad_input = pcl_mlp_ext.sparse_backward(
                 grad_output,
@@ -142,7 +110,7 @@ class XsmmFC(Function):
         #print(f"XsmmFCBWD: {t2-t1} s")
         ##################################
 
-        return (grad_input, grad_weight, grad_bias, None, None, None)
+        return (grad_input, grad_weight, grad_bias, None, None)
 
 class XsmmLinear(nn.Module):
     r"""PCL Linear module for using libxsmm blocked GEMM"""
@@ -164,8 +132,6 @@ class XsmmLinear(nn.Module):
         self.bn = 0
         self.default_blocking = default_blocking
         self.xsmm_handle = None
-        self.desc = None
-        self.xsmm_code_pointer = None # For precomputed kernels
         self.set_activation_type(act_type)
         self.output_stays_blocked = output_stays_blocked
         self.weight = Parameter(torch.Tensor(K, C))
@@ -315,19 +281,12 @@ class XsmmLinear(nn.Module):
         if N != self.N or bn != self.bn:
             print("Create handle: ", N, self.padded_C, self.K, bn, self.bc, self.bk, input.dtype, 0 if self.bias is None else 1, self.act_type)
             self.xsmm_handle = XsmmHandle(N, self.padded_C, self.K, bn, self.bc, self.bk, input.dtype, 0 if self.bias is None else 1, self.act_type)
-
-            # Create descriptfor for XsmmLinear
-            # Role is mostly redundant to handle but interface does not allow access to handle
-            self.desc = XsmmDescriptor(N, self.padded_C, self.K, bn, self.bc, self.bk, 16)
             self.N = N
             self.bn = bn
             self.nbn = N // bn
-        
+
         wtensor = self.get_blocked_weight(to_dtype=input.dtype)
         btensor = self.bias.to(input.dtype)
-
-
-        tic = time.time()
 
         # Check weight sparsity
         n_el = 1
@@ -338,13 +297,8 @@ class XsmmLinear(nn.Module):
 
         # Change threshold to a smarter value
         use_sparse_kernels = True if sparsity > 0.6 else False
-        #use_sparse_kernels = False
 
-        if self.xsmm_code_pointer == None and use_sparse_kernels:
-            self.xsmm_code_pointer = XsmmCodePointer(self.desc, wtensor)
-            print("Code pointer created: {}".format(time.time() - tic))
-
-        output =  XsmmFC.apply(input, wtensor, btensor, self.xsmm_handle, self.xsmm_code_pointer, use_sparse_kernels)
+        output =  XsmmFC.apply(input, wtensor, btensor, self.xsmm_handle, use_sparse_kernels)
         if not self.output_stays_blocked:
             #output = output.permute(0, 2, 1, 3).view(self.N, self.K).contiguous()
             output = output.permute(0, 2, 1, 3).reshape(self.N, self.K).contiguous()
@@ -355,3 +309,5 @@ class XsmmLinear(nn.Module):
         return 'C={}, K={}, bias={}'.format(
             self.C, self.K, self.bias is not None
         )
+
+

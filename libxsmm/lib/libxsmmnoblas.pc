@@ -3,7 +3,7 @@ Description: LIBXSMM substituted LAPACK/BLAS dependency
 URL: https://github.com/libxsmm/libxsmm/
 Version: 1.17.0
 
-prefix=/home/kaotixs/libxsmm_project/libxsmm
+prefix=/home/kshvedov/thesis/libxsmm_project/libxsmm
 includedir=${prefix}/include
 libdir=${prefix}/lib
 

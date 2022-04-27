@@ -1,0 +1,17 @@
+# ninja log v5
+0	39186	1650449581230399093	/home/kaotixs/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	dd70d123489f5b48
+12	31172	1650455585650334250	/home/kaotixs/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	dd70d123489f5b48
+6	25939	1650479620372714667	/home/kaotixs/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	dd70d123489f5b48
+1	25591	1650479788882712847	/home/kaotixs/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	dd70d123489f5b48
+1	25430	1650480058822709932	/home/kaotixs/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	dd70d123489f5b48
+0	22855	1650483150488643822	/home/kshvedov/thesis/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	c37e1d271f87c734
+1	23426	1650587857999040694	/home/kshvedov/thesis/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	c37e1d271f87c734
+1	21294	1650588811236219751	/home/kshvedov/thesis/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	c37e1d271f87c734
+1	21267	1650589757916854908	/home/kshvedov/thesis/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	c37e1d271f87c734
+1	22822	1651059493678907252	/home/kshvedov/thesis/libxsmm_project/libxsmm/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	c37e1d271f87c734
+0	20629	1651092616516645238	/home/kshvedov/thesis/libxsmm_project/libxsmm_2/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	11ce38e49a158825
+1	20578	1651095036248447731	/home/kshvedov/thesis/libxsmm_project/libxsmm_2/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	11ce38e49a158825
+1	20976	1651095635939889477	/home/kshvedov/thesis/libxsmm_project/libxsmm_2/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	11ce38e49a158825
+1	20824	1651096335325042554	/home/kshvedov/thesis/libxsmm_project/libxsmm_2/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	11ce38e49a158825
+1	20821	1651096545392655204	/home/kshvedov/thesis/libxsmm_project/libxsmm_2/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	11ce38e49a158825
+1	20674	1651096893130985184	/home/kshvedov/thesis/libxsmm_project/libxsmm_2/samples/deeplearning/sparse_training/pcl_mlp/build/temp.linux-x86_64-3.8/pcl_mlp_ext.o	11ce38e49a158825

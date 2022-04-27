@@ -352,6 +352,7 @@ at::Tensor mlp_sparse_forward(
   int flags = LIBXSMM_GEMM_FLAGS('N', 'N');
 
   float *l_A = (float *)libxsmm_aligned_malloc(sizeof(float) * N * C, 64);
+  float *l_AA = (float *)libxsmm_aligned_malloc(sizeof(float) * N * C, 64);
   float *l_B = (float *)libxsmm_aligned_malloc(sizeof(float) * C * K, 64);
   float *l_C = (float *)libxsmm_aligned_malloc(sizeof(float) * N * K, 64);
 

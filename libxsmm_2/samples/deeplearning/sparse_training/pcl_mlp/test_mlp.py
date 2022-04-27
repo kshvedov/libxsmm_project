@@ -1,3 +1,4 @@
+import time
 import torch
 import random
 import pcl_mlp
@@ -6,17 +7,18 @@ import pcl_mlp
 torch.manual_seed(77)
 random.seed(77)
 
-"""
+
 MB = 128 * 8
 N = MB
 K=512 #128
 C=512 #64
-"""
 
+"""
 MB = 64
 N = MB
 K=64 #128
 C=64 #64
+"""
 
 """
 MB = 64
@@ -29,10 +31,9 @@ fc = pcl_mlp.XsmmLinear(C, K)
 #fc = pcl_mlp.XsmmLinear(C, K)
 tl = torch.nn.Linear(C, K)
 
-sparsity_rate = 0.8
-#sparsity_rate = 0.95
+sparsity_rate = 0.95
 #sparsity_rate = 0.2
-weight = torch.zeros(K, C, requires_grad=True)
+weight = torch.zeros(K, C, requires_grad=False)
 
 # Populate weight matrix
 for k in range(K):
@@ -130,6 +131,7 @@ if not x1.grad.allclose(x2.grad, rtol=1e-6, atol=1e-6):
 
 print("xsmm: {}".format(x1.grad.mean()))
 print("ref: {}".format(x2.grad.mean()))
+
 ###########################################
 # Timing prints
 ###########################################

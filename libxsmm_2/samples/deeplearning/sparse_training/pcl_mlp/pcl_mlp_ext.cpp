@@ -4,6 +4,8 @@
 #include <ATen/record_function.h>
 #include <torch/csrc/autograd/VariableTypeUtils.h>
 
+#include "time.h"
+#include <stdio.h>
 #include <vector>
 #include <iostream>
 #ifdef _OPENMP
@@ -16,14 +18,6 @@
 #endif
 #include <libxsmm.h>
 
-#include <algorithm> // std::copy
-
-// To measure time 
-#include <chrono>
-
-using namespace std;
-using namespace std::chrono;
-
 #define CHKERR_LIBXSMM_DNN(A) { const int chkerr_libxsmm_dnn_ = A; if (LIBXSMM_DNN_SUCCESS != chkerr_libxsmm_dnn_) { \
   fprintf(stderr, "%s\n", libxsmm_dnn_get_error(chkerr_libxsmm_dnn_)); global_status = chkerr_libxsmm_dnn_; } \
 }
@@ -33,53 +27,6 @@ using namespace std::chrono;
 #else
 # define PRINT_LAYOUT(DESC, LAYOUT, PT_TENSOR)
 #endif
-
-/* Custom struct */
-typedef struct xsmm_linear_desc {
-    int N;
-    int C;
-    int K;
-    int NB;
-    int KB;
-    int CB;
-    int nb;
-    // Add more later
-} xsmm_linear_desc;
-
-/* Code pointer struct */
-typedef struct sparse_xsmm_handle {
-    /* description regarding fc layer */
-    xsmm_linear_desc * desc;
-
-    /* Intermediate data structures */
-    unsigned int ** col_ptr;
-    unsigned int ** row_idx;
-    float ** values;
-
-    int num_blocks;
-
-    /* Cached code pointers for kernels */
-    libxsmm_smmfunction * microkernels;
-} sparse_xsmm_handle;
-
-
-/* Initializer function for sparse_xsmm_handle */
-sparse_xsmm_handle * init_sparse_xsmm_handle(int num_blocks)
-{
-    sparse_xsmm_handle * sp_handle = (sparse_xsmm_handle*)malloc(sizeof(sparse_xsmm_handle));
-
-    sp_handle->num_blocks = num_blocks;
-    sp_handle->col_ptr = (unsigned int **)libxsmm_aligned_malloc(
-            num_blocks * sizeof(unsigned int *), 64);
-    sp_handle->row_idx = (unsigned int **)libxsmm_aligned_malloc(
-            num_blocks * sizeof(unsigned int *), 64);
-    sp_handle->values = (float **)libxsmm_aligned_malloc(
-            num_blocks * sizeof(float *), 64);
-    sp_handle->microkernels = (libxsmm_smmfunction *)libxsmm_aligned_malloc(
-            num_blocks * sizeof(libxsmm_smmfunction), 64);
-
-    return sp_handle;
-}
 
 /* Helper functions for sparse matrix */
 void BlockSpMatStep1(int K, int C, int KB, int CB, unsigned int *colptr,
@@ -280,7 +227,7 @@ void *create_handle(int N, int C, int K, int bn, int bc, int bk, int dtype, int 
   CHKERR_LIBXSMM_DNN( status );
   auto scratch_size = libxsmm_dnn_fullyconnected_get_scratch_size( libxsmm_handle, &status );
   CHKERR_LIBXSMM_DNN( status );
-  auto scratch = libxsmm_aligned_scratch( scratch_size, 2097152 );
+  auto scratch = libxsmm_aligned_malloc( scratch_size, 2097152 );
   CHKERR_LIBXSMM_DNN( libxsmm_dnn_fullyconnected_bind_scratch( libxsmm_handle, scratch ) );
   //std::cout << "Create Handle = " << libxsmm_handle << std::endl;
   return (void *)libxsmm_handle;
@@ -316,6 +263,8 @@ at:: Tensor bias_add_grad(at::Tensor &grad_out)
   return grad_bias;
 }
 
+
+
 /*
  * input 2D
  **/
@@ -338,6 +287,10 @@ at::Tensor mlp_sparse_forward(
   auto C = nbc * bc;
   auto K = nbk * bk;
 
+  printf("\n\nmlp_sparse_forward\n\n");
+  printf("input shape: (%d, %d)\n", N, C);
+  printf("weight shape: (%d, %d)\n", C, K);
+  printf("output shape: (%d, %d)\n", N, K);
   libxsmm_dnn_err_t global_status;
   libxsmm_dnn_fullyconnected* libxsmm_handle = (libxsmm_dnn_fullyconnected*)libxsmm_handle_;
 
@@ -368,6 +321,8 @@ at::Tensor mlp_sparse_forward(
       for (l_c = 0; l_c < C / CB; ++l_c) {
           for (l_nn = 0; l_nn < NB / nb; ++l_nn) {
               for (l_cc = 0; l_cc < CB; ++l_cc) {
+                  // Flat Pointer
+                  float * flat_ptr = (float*)input[l_n][l_c].data_ptr();
                   for (l_nnn = 0; l_nnn < nb; ++l_nnn) {
                       int i = l_nn * nb + l_nnn;
                       int j = l_cc;
@@ -376,7 +331,8 @@ at::Tensor mlp_sparse_forward(
                       LIBXSMM_VLA_ACCESS(5, l_p_A, l_n, l_c, l_nn, l_cc,
                               l_nnn, C / CB, NB / nb, CB, nb) =
 
-                         (float)input[l_n][l_c][i][j].item().to<float>();
+                         //(float)input[l_n][l_c][i][j].item().to<float>();
+                         flat_ptr[i*NB+j];
                          // (float)input_[l_n * NB + i][l_c * CB + j].item().to<float>();
                     aa++;
                   }
@@ -428,12 +384,13 @@ at::Tensor mlp_sparse_forward(
               nnz++;
               colptr[l_k + 1]++;
           }
+          l_B[l_k * C + l_c] = (float)tmp;
       }
   }
 
   // Seems to work correctly
   // printf("sparsity of B: %f\n", (float)(nnz)/(float)(K*C));
-
+  // does this need chnages?
   for (l_k = 0; l_k < K; l_k++) {
       colptr[l_k + 1] += colptr[l_k];
   }
@@ -443,16 +400,9 @@ at::Tensor mlp_sparse_forward(
   for (l_k = 0; l_k < K; l_k++) {
       int offset = colptr[l_k];
       for (l_c = 0; l_c < C; l_c++) {
-
-          int nbk_idx = l_k / KB;
-          int nbc_idx = l_c / CB;
-          int bk_idx = l_k % KB;
-          int bc_idx = l_c % CB;
-
-          tmp = (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>();
-          if (tmp != 0) {
+          if (l_B[l_k * C + l_c] != 0) {
               rowidx[offset] = l_c;
-              values[offset] = tmp;
+              values[offset] = l_B[l_k * C + l_c];
               offset++;
           }
       }
@@ -494,12 +444,12 @@ at::Tensor mlp_sparse_forward(
               num_blocks * sizeof(libxsmm_smmfunction), 64);
   for (blk_idx = 0; blk_idx < num_blocks; ++blk_idx) {
       l_xgemm_desc[blk_idx] = libxsmm_gemm_descriptor_dinit(
-              &l_xgemm_blob, LIBXSMM_GEMM_PRECISION(float), NB / nb, KB, CB, CB,
+              &l_xgemm_blob, LIBXSMM_DATATYPE(float), NB / nb, KB, CB, CB,
               0, KB, alpha, beta, flags, prefetch);
       mykernel[blk_idx] =
-          libxsmm_create_xcsc_soa(l_xgemm_desc[blk_idx], b_colptr[blk_idx],
+          libxsmm_create_packed_spxgemm_csc(l_xgemm_desc[blk_idx], nb, b_colptr[blk_idx],
                   b_rowidx[blk_idx],
-                  (const void *)b_values[blk_idx], nb).smm;
+                  (const void *)b_values[blk_idx]).smm;
   }
 
   // Execute kernels amoung threads
@@ -589,10 +539,8 @@ at::Tensor mlp_forward(void *libxsmm_handle_, torch::Tensor input, torch::Tensor
   auto nbk = weight.size(0);
   auto bk = weight.size(3);
 
-  /*
   printf("input shape: (%d, %d)\n", input.size(0), input.size(1));
   printf("weight shape: (%d, %d)\n", weight.size(0), weight.size(1));
-  */
   auto output = at::empty({nbn, nbk, bn, bk}, input.options());
   //std::cout << "FWD Handle = " << libxsmm_handle_ << std::endl;
   libxsmm_dnn_fullyconnected_set_ptr_helper(libxsmm_handle, LIBXSMM_DNN_REGULAR_INPUT, input, "Input");
@@ -646,6 +594,11 @@ at::Tensor mlp_sparse_backward(
   int KB = bk;
 
   int nb = 16; // or 32
+
+  printf("\n\nmlp_sparse_backward\n\n");
+  printf("input shape: (%d, %d)\n", N, C);
+  printf("weight shape: (%d, %d)\n", C, K);
+  printf("grad_output shape: (%d, %d)\n", N, K);
 
   /* Declare return variables */
   auto grad_input = at::empty(input.sizes(), input.options());
@@ -781,14 +734,15 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
               num_blocks * sizeof(libxsmm_smmfunction), 64);
   for (blk_idx = 0; blk_idx < num_blocks; ++blk_idx) {
       l_xgemm_desc[blk_idx] = libxsmm_gemm_descriptor_dinit(
-              &l_xgemm_blob, LIBXSMM_GEMM_PRECISION(float), NB / nb, CB, KB, KB,
+              &l_xgemm_blob, LIBXSMM_DATATYPE(float), NB / nb, CB, KB, KB,
               0, CB, alpha, beta, flags, prefetch);
       mykernel[blk_idx] =
-          libxsmm_create_xcsc_soa(l_xgemm_desc[blk_idx], b_colptr[blk_idx],
+          libxsmm_create_packed_spxgemm_csc(l_xgemm_desc[blk_idx], nb, b_colptr[blk_idx],
                   b_rowidx[blk_idx],
-                  (const void *)b_values[blk_idx], nb).smm;
+                  (const void *)b_values[blk_idx]).smm;
   }
 
+  printf("Executing kernels\n");
   // Execute kernels amoung threads
   int k, n, c;
 #ifdef _OPENMP
@@ -861,13 +815,28 @@ at::Tensor mlp_sparse_update(
 
   int nb = 16; // or 32
 
+  printf("\n\n mlp sparse update \n\n");
+  printf("input shape: (%d, %d)\n", N, C);
+  printf("weight shape: (%d, %d)\n", C, K);
+  printf("grad_output shape: (%d, %d)\n", N, K);
+
   /* # # # # # BUG # # # # # */
   // Times test required
   /* Declare return variables */
-  //auto grad_weight = at::empty(weight.sizes(), weight.options());
+  /*clock_t start, end;
+  double cpu_time_used;
+  start = clock();*/
   auto grad_weight = at::zeros(weight.sizes(), weight.options());
+  //auto grad_weight = at::empty(weight.sizes(), weight.options());
+  /*end = clock();
+  cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+  printf("\nInit time\n: %lf", cpu_time_used);
+  FILE *fp;
+  fp = fopen("bug_timing.txt", "a");
+  fprintf(fp, "%lf\n", cpu_time_used);
+  fclose(fp);*/
   /* # # # # # # # # # # # # */
-
+  
   /* Used throughout this function */
   libxsmm_gemm_prefetch_type prefetch = LIBXSMM_GEMM_PREFETCH_NONE;
   int flags = LIBXSMM_GEMM_FLAGS('N', 'N');
@@ -1017,18 +986,25 @@ at::Tensor mlp_sparse_update(
   libxsmm_smmfunction *upd_kernel = (libxsmm_smmfunction *)libxsmm_aligned_malloc(
           num_blocks * sizeof(libxsmm_smmfunction), 64);
 
+  printf("\n----> Location 1\n");
+
   for (int blk_idx = 0; blk_idx < num_blocks; ++blk_idx) {
+      printf("\n----> Location 2 %d\n", blk_idx);
       l_xgemm_desc[blk_idx] = libxsmm_gemm_descriptor_dinit(
-              &l_xgemm_blob, LIBXSMM_GEMM_PRECISION(float), CB, KB, NB / nb, CB,
+              &l_xgemm_blob, LIBXSMM_DATATYPE(float), CB, KB, NB / nb, CB,
               KB, 0, alpha, beta, flags, prefetch);
+      printf("\n----> Location 3 %d\n", blk_idx);
       // Creating update micro kernels
       upd_kernel[blk_idx] =
-          libxsmm_create_xcsc_soa(
-                  l_xgemm_desc[blk_idx],
+          libxsmm_create_packed_spxgemm_csc(
+                  l_xgemm_desc[blk_idx], nb,
                   c_colptr[blk_idx],
                   c_rowidx[blk_idx],
-                  (const void *)c_values[blk_idx], nb).smm;
+                  (const void *)c_values[blk_idx]).smm;
+      printf("\n----> Location 4 %d\n", blk_idx);
   }
+
+printf("\n----> Location END\n");
 
 int k, n, c;
 #ifdef _OPENMP
@@ -1163,364 +1139,6 @@ void destroy_handle( void* libxsmm_handle_ )
   CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_fullyconnected( libxsmm_handle ) );
 }
 
-void *mlp_create_code_pointer(
-        void * _desc,
-        torch::Tensor _weight,
-        int kernel_type // 0: FWD, 1: BWD, 2: UPD
-        ) 
-{
-    // auto start = high_resolution_clock::now();
-
-    xsmm_linear_desc *desc = (xsmm_linear_desc*)_desc;
-    auto N = desc->N;
-    auto C = desc->C;
-    auto K = desc->K;
-    auto NB = desc->NB;
-    auto CB = desc->CB;
-    auto KB = desc->KB;
-    auto nb = desc->nb;
-
-    /* Used for xgemm_desc initialization */
-    int flags = LIBXSMM_GEMM_FLAGS('N', 'N');
-    libxsmm_gemm_prefetch_type prefetch = LIBXSMM_GEMM_PREFETCH_NONE;
-
-    /* Convert weight */
-    unsigned int col_size, row_size;
-
-    auto weight = _weight;
-
-    if (kernel_type == 0 || kernel_type == 2) {
-        col_size = K;
-        row_size = C;
-
-    } else if (kernel_type == 1) {
-        weight = _weight.permute({1, 2, 0, 3}).reshape({C, K}).transpose(0, 1);
-        col_size = C;
-        row_size = K;
-    }
-
-    /* Scope through weight tensor B */
-    int nnz = 0;
-
-    unsigned int *colptr = (unsigned int*)libxsmm_aligned_malloc(
-            (col_size+1) * sizeof(unsigned int), 64);
-
-    colptr[0] = 0;
-
-    float tmp = 0.0;
-    for (int l_k = 0; l_k < col_size; ++l_k) {
-        colptr[l_k + 1] = 0;
-        for (int l_c = 0; l_c < row_size; ++l_c) {
-            int nbk_idx = l_k / KB;
-            int nbc_idx = l_c / CB;
-            int bk_idx = l_k % KB;
-            int bc_idx = l_c % CB;
-
-            if (kernel_type == 0 || kernel_type == 2) {
-                tmp = (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>();
-            } else {
-                tmp = (float)weight[l_c][l_k].item().to<float>();
-            }
-            if (tmp != 0.0) {
-                nnz++;
-                colptr[l_k + 1]++;
-            }
-        }
-    }
-
-    for (int l_k = 0; l_k < col_size; ++l_k) {
-        colptr[l_k + 1] += colptr[l_k];
-    }
-
-    unsigned int *rowidx = 
-        (unsigned int*)libxsmm_aligned_malloc(nnz * sizeof(unsigned int), 64);
-    float *values = 
-        (float *)libxsmm_aligned_malloc(nnz * sizeof(float), 64);
-
-    for (int l_k = 0; l_k < col_size; ++l_k) {
-        int offset = colptr[l_k];
-        for (int l_c = 0; l_c < row_size; ++l_c) {
-            int nbk_idx = l_k / KB;
-            int nbc_idx = l_c / CB;
-            int bk_idx = l_k % KB;
-            int bc_idx = l_c % CB;
-
-            if (kernel_type == 0 || kernel_type == 2) {
-                tmp = (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>();
-            } else {
-                tmp = (float)weight[l_c][l_k].item().to<float>();
-            }
-            if (tmp != 0.0) {
-                rowidx[offset] = l_c;
-                values[offset] = tmp;
-                offset++;
-            }
-        }
-    }
-
-    int num_blocks = C / CB * K / KB;
-    sparse_xsmm_handle * sp_handle = init_sparse_xsmm_handle(num_blocks);
-
-    // Copy desc to sparse_xsmm_handle
-    sp_handle->desc = desc;
-
-    /* Convert weight tensor to CSC format */
-    int *nnzb = (int*)libxsmm_aligned_malloc(num_blocks * sizeof(int), 64);
-
-    /* Init sp_handle->col_ptr */
-    for (int blk_idx = 0; blk_idx < num_blocks; ++blk_idx) {
-        sp_handle->col_ptr[blk_idx] = (unsigned int *)libxsmm_aligned_malloc(
-                (KB + 1) * sizeof(unsigned int), 64);
-    }
-
-    BlockSpMatStep1(K, C, KB, CB, colptr, rowidx, sp_handle->col_ptr, nnzb);
-
-    /* Init sp_handle->row_idx, sp_handle->values */
-    for (int blk_idx = 0; blk_idx < num_blocks; ++blk_idx) {
-        sp_handle->row_idx[blk_idx] = (unsigned int *)libxsmm_aligned_malloc(
-                nnzb[blk_idx] * sizeof(unsigned int), 64);
-        sp_handle->values[blk_idx] = (float *)libxsmm_aligned_malloc(
-                nnzb[blk_idx] * sizeof(float), 64);
-    }
-
-    BlockSpMatStep2(K, C, KB, CB, colptr, rowidx, values, 
-            sp_handle->col_ptr, sp_handle->row_idx, sp_handle->values);
-
-    // Update kernels
-    float alpha = 1.0;
-    float beta = 1.0;
-
-    libxsmm_descriptor_blob l_xgemm_blob;
-    libxsmm_gemm_descriptor **l_xgemm_desc =
-        (libxsmm_gemm_descriptor **)libxsmm_aligned_malloc(
-                num_blocks * sizeof(libxsmm_gemm_descriptor *), 64);
-
-    for (int blk_idx = 0; blk_idx < num_blocks; ++blk_idx) {
-        l_xgemm_desc[blk_idx] = libxsmm_gemm_descriptor_dinit(
-                &l_xgemm_blob, LIBXSMM_GEMM_PRECISION(float), NB / nb, KB, CB, CB,
-                0, KB, alpha, beta, flags, prefetch);
-        sp_handle->microkernels[blk_idx] =
-            libxsmm_create_xcsc_soa(
-                    l_xgemm_desc[blk_idx],
-                    sp_handle->col_ptr[blk_idx],
-                    sp_handle->row_idx[blk_idx],
-                    (const void *)sp_handle->values[blk_idx], nb).smm;
-    }
-
-    printf("\n\n Code pointer created !! \n\n");
-
-    // cout << "Code pointer creation time: " << duration_cast<microseconds>(high_resolution_clock::now() - start).count() << "microseconds" << endl;
-
-    return (void*)sp_handle;
-}
-
-void mlp_destroy_code_pointer() {
-    printf("Destroying code pointer\n");
-}
-
-void * mlp_create_descriptor (
-        int N, int C, int K, int bn, int bc, int bk, int nb) {
-    xsmm_linear_desc * desc = (xsmm_linear_desc*)malloc(sizeof(xsmm_linear_desc));
-
-    /* zero entire content; safer and sets data and code pointers to NULL */
-    memset(desc, 0, sizeof(*desc));
-
-    desc->N = N;
-    desc->C = C;
-    desc->K = K;
-    desc->NB = bn;
-    desc->CB = bc;
-    desc->KB = bk;
-    desc->nb = nb;
-    return (void*)desc;
-}
-
-at::Tensor mlp_execute_sparse_fwd(
-        void * sp_handle_, 
-        torch::Tensor input,
-        torch::Tensor weight,
-        torch::Tensor bias)
-{
-    // Rehydrate sparse_xsmm_handle
-    sparse_xsmm_handle * sp_handle = (sparse_xsmm_handle*)sp_handle_;
-
-    /* Prep variables */
-    auto N = sp_handle->desc->N;
-    auto C = sp_handle->desc->C;
-    auto K = sp_handle->desc->K;
-    auto NB = sp_handle->desc->NB;
-    auto CB = sp_handle->desc->CB;
-    auto KB = sp_handle->desc->KB;
-    auto nb = sp_handle->desc->nb;
-
-    float *l_A = (float *)libxsmm_aligned_malloc(sizeof(float) * N * C, 64);
-    float *l_AA = (float *)libxsmm_aligned_malloc(sizeof(float) * N * C, 64);
-    float *l_B = (float *)libxsmm_aligned_malloc(sizeof(float) * C * K, 64);
-    float *l_C = (float *)libxsmm_aligned_malloc(sizeof(float) * N * K, 64);
-
-    LIBXSMM_VLA_DECL(5, float, l_p_A, l_A, C / CB, NB / nb, CB, nb);
-    LIBXSMM_VLA_DECL(5, float, l_p_C, l_C, K / KB, NB / nb, KB, nb);
-
-    auto t_convert_input = high_resolution_clock::now();
-    /* Convert input */
-    /* How can we byapss LIBXSMM_VLA_DECL...? */
-
-    /*
-       l_n < N / NB N = 128, NB = 64
-       */
-    /*
-    for (int l_n = 0; l_n < N / NB; ++l_n) {
-        for (int l_c = 0; l_c < C / CB; ++l_c) {
-            int offset = l_n * NB + l_c * CB;
-            memcpy(&l_AA[offset], input[l_n][l_c].data_ptr(), NB * CB * sizeof(float));
-            // memcpy(l_A, input[l_n][l_c].data_ptr(), NB * CB * sizeof(float));
-        }
-    }
-    */
-
-#ifdef _OPENMP
-  auto nthr = omp_get_max_threads();
-  printf("\n\n max threads: %d\n\n", nthr);
-#endif
-
-
-  /*
-int l_n = 0;
-int l_c = 0;
-int l_nn =0;
-int l_cc = 0;
-int l_nnn = 0;
-*/
-
-#ifdef _OPENMP
-#pragma omp parallel for LIBXSMM_OPENMP_COLLAPSE(4)
-#endif
-    for (int l_n = 0; l_n < N / NB; ++l_n) {
-        for (int l_c = 0; l_c < C / CB; ++l_c) {
-            for (int l_nn = 0; l_nn < NB / nb; ++l_nn) {
-                for (int l_cc = 0; l_cc < CB; ++l_cc) {
-                    float * flat_ptr = (float*)input[l_n][l_c].data_ptr();
-                    for (int l_nnn = 0; l_nnn < nb; ++l_nnn) {
-                        int i = l_nn * nb + l_nnn;
-                        int j = l_cc;
-                        LIBXSMM_VLA_ACCESS(5, l_p_A, l_n, l_c, l_nn, l_cc,
-                            l_nnn, C / CB, NB / nb, CB, nb) = flat_ptr[i*NB+j];
-                    }
-                }
-            } 
-        }
-    }
-
-    // Lets see how l_A is layed out in both cases
-    /*
-    printf("Correct\n");
-    for (int i = 0; i < 100; ++i) {
-        printf("%f\n", l_A[i]);
-    }
-
-    printf("\n\n");
-
-    for (int i = 0; i < 100; ++i) {
-        printf("%f\n", l_AA[i]);
-    }
-    */
-
-    auto t_convert_input_end = high_resolution_clock::now();
-
-
-    auto t_prepare_output = t_convert_input_end;
-
-    /* Prepare output */
-#ifdef _OPENMP
-#pragma omp parallel for num_threads(nthr)
-#endif
-    for (int l_n = 0; l_n < N / NB; ++l_n) {
-        for (int l_k = 0; l_k < K / KB; ++l_k) {
-            for (int l_nn = 0; l_nn < NB / nb; ++l_nn) {
-                for (int l_kk = 0; l_kk < KB; ++l_kk) {
-                    for (int l_nnn = 0; l_nnn < nb; ++l_nnn) {
-                        LIBXSMM_VLA_ACCESS(5, l_p_C, l_n, l_k, l_nn, l_kk,
-                                l_nnn, K / KB, NB / nb, KB, nb) = 0.0f;
-                    }
-                }
-            }
-        }
-    }
-
-    auto t_prepare_output_end = high_resolution_clock::now();
-    auto t_execute_microkernels = high_resolution_clock::now();
-    // Cast void pointer to libxsmm_smmfunction
-    libxsmm_smmfunction * fwd_kernels = sp_handle->microkernels;
-    float ** b_values = sp_handle->values;
-
-    // Execute microkernels
-    int k, n, c;
-#ifdef _OPENMP
-#   pragma omp parallel for LIBXSMM_OPENMP_COLLAPSE(2) private(k,n,c)
-#endif
-    for (k = 0; k < K / KB; ++k) {
-        for (n = 0; n < N / NB; ++n) {
-            for (c = 0; c < C / CB; ++c) {
-                fwd_kernels[k * C / CB + c](
-                        &(l_A[(n * C / CB + c) * CB * NB]),
-                        b_values[k * C / CB + c],
-                        &(l_C[(n * K / KB + k) * NB * KB]));
-            }
-        }
-    }
-
-    auto t_execute_microkernels_end = high_resolution_clock::now();
-    auto t_format_output = t_execute_microkernels_end;
-
-    auto _output = at::empty({N, K}, input.options());
-
-#ifdef _OPENMP
-#   pragma omp parallel for 
-#endif
-    for (int l_n = 0; l_n < N / NB; ++l_n) {
-        for (int l_k = 0; l_k < K / KB; ++l_k) {
-            int offset = (l_n * K / KB + l_k) * NB * KB;
-
-            // Block Grid
-            int i_blk_offset = l_k * KB;
-            int j_blk_offset = l_n * NB;
-            for (int l_nn = 0; l_nn < NB * KB; ++l_nn) {
-                // Subblock grid
-                // blocks are sized 4x64x16
-                // First we trying 16x64 and 4 of those
-
-                int i = (l_nn % (NB * nb)) / nb;
-                int j_small_offset = l_nn % nb;
-                int j_big_offset = l_nn / (nb * NB);;
-                int j = j_small_offset + (j_big_offset * nb);
-
-                _output.index_put_({j_blk_offset + j, i_blk_offset + i}, l_C[offset + l_nn]);
-            }
-        }
-    }
-
-    auto output = _output.reshape({N, K});
-
-    auto t_format_output_end = high_resolution_clock::now();
-
-    cout << "Convert input time: " << duration_cast<microseconds>(t_convert_input_end - t_convert_input).count() << "seconds" << endl;
-    /*
-    cout << "Prepare output time: " << duration_cast<microseconds>(t_prepare_output_end - t_prepare_output).count() << "seconds" << endl;
-    cout << "Execute microkernel time: " << duration_cast<microseconds>(t_execute_microkernels_end - t_execute_microkernels).count() << "seconds" << endl;
-    cout << "Format output time: " << duration_cast<microseconds>(t_format_output_end - t_format_output).count() << "seconds" << endl;
-    */
-
-
-    /* Clean up */
-    libxsmm_free(l_A);
-    libxsmm_free(l_B);
-    libxsmm_free(l_C);
-
-    output += bias;
-
-    return output;
-}
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("forward", &mlp_forward, "Pcl libxsmm MLP forward");
   m.def("backward", &mlp_backward, "Pcl libxsmm MLP backward");
@@ -1530,8 +1148,4 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("sparse_forward", &mlp_sparse_forward, "Pcl libxsmm MLP sparse forward");
   m.def("sparse_backward", &mlp_sparse_backward, "Pcl libxsmm MLP sparse backward");
   m.def("sparse_update", &mlp_sparse_update, "Pcl libxsmm MLP sparse update");
-  m.def("create_descriptor", &mlp_create_descriptor, "descriptor for libxsmm linear layer");
-  m.def("create_code_pointer", &mlp_create_code_pointer, "Pcl libxsmm create code pointer");
-  m.def("destroy_code_pointer", &mlp_destroy_code_pointer, "Pcl libxsmm destroy code pointer");
-  m.def("execute_sparse_fwd", &mlp_execute_sparse_fwd, "Pcl libxsmm execute sparse forward");
 }
