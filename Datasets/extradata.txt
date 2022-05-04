@@ -1,0 +1,3 @@
+http://help.sentiment140.com/for-students/
+https://ai.stanford.edu/~amaas/data/sentiment/
+https://www.cs.jhu.edu/~mdredze/datasets/sentiment/

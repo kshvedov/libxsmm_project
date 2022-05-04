@@ -145,13 +145,16 @@ if __name__ == "__main__":
 
     #model = Feedforward(256, 256, use_sparse_kernels=True)
     #model = Feedforward(256, 256, use_sparse_kernels=True)
+    #model = ReluFeedforward(256, 256, use_sparse_kernels=True)
     #model = ThreeFeedforward(256, 256, use_sparse_kernels=False)
     model = ThreeFeedforward(256, 256, use_sparse_kernels=True)
     #model = Feedforward(1024, 512, use_sparse_kernels=True)
 
     # Prune weight
-    prune_w = 0.8
+    prune_w = 0.4
     prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
+    prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
+    prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
 
     criterion = torch.nn.BCELoss()
     optimizer = torch.optim.SGD(model.parameters(), lr = 0.01)
@@ -169,6 +172,9 @@ if __name__ == "__main__":
     epoch = 20
 
     ts = time.perf_counter()
+
+    
+
     for epoch in range(epoch):
         ts_epoch = time.perf_counter()
         tic = time.perf_counter()
@@ -197,7 +203,7 @@ if __name__ == "__main__":
     plt.ylabel("Loss")
     plt.title(f"Loss {te-ts:.2f}s")
 
-    plt.savefig(f"loss_{str(prune_w).replace('.','_')}.png")
+    plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
 
     """
     model.eval()

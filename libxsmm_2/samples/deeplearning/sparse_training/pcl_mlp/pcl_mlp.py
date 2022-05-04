@@ -32,7 +32,7 @@ class XsmmFC(Function):
     use_sparse_kernels = False
 
     @staticmethod
-    def forward(ctx, input, weight, bias, handle, use_sparse_kernels=False):
+    def forward(ctx, input, weight, bias, handle, use_sparse_kernels):
         print("Inside XsmmFCForward")
         ##################################
         # Timing
@@ -296,7 +296,7 @@ class XsmmLinear(nn.Module):
         sparsity = torch.sum(wtensor == 0.) / float(n_el)
 
         # Change threshold to a smarter value
-        use_sparse_kernels = True if sparsity > 0.6 else False
+        use_sparse_kernels = True if sparsity > 0.0 else False
 
         output =  XsmmFC.apply(input, wtensor, btensor, self.xsmm_handle, use_sparse_kernels)
         if not self.output_stays_blocked:

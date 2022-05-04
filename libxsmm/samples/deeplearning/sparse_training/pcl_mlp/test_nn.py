@@ -32,6 +32,28 @@ class Feedforward(torch.nn.Module):
         output = self.sigmoid(output)
         return output 
 
+# Initial Feed forward class
+class ReluFeedforward(torch.nn.Module):
+    def __init__(self, input_size, hidden_size, use_sparse_kernels=False):
+        super(ReluFeedforward, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        if use_sparse_kernels:
+            self.fc1 = pcl_mlp.XsmmLinear(input_size, hidden_size, act_type = 'relu')
+        else:
+            self.fc1 = torch.nn.Linear(self.input_size, self.hidden_size)
+        #self.relu = torch.nn.ReLU()
+        self.fc2 = torch.nn.Linear(self.hidden_size, 1)
+        self.sigmoid = torch.nn.Sigmoid()
+
+    def forward(self, x):
+        hidden = self.fc1(x)
+        #relu = self.relu(hidden)
+        # There is a possibility to swap relu to libxsmm version (needs testing)
+        output = self.fc2(hidden)
+        output = self.sigmoid(output)
+        return output 
+
 # Initial Feed forward class --> Simple test
 # Torch version works, 
 class ThreeFeedforward(torch.nn.Module):
@@ -122,14 +144,17 @@ if __name__ == "__main__":
     # Test with sparse_kernels
 
     #model = Feedforward(256, 256, use_sparse_kernels=True)
-    model = Feedforward(256, 256, use_sparse_kernels=True)
+    #model = Feedforward(256, 256, use_sparse_kernels=True)
+    #model = ReluFeedforward(256, 256, use_sparse_kernels=True)
     #model = ThreeFeedforward(256, 256, use_sparse_kernels=False)
-    #model = ThreeFeedforward(256, 256, use_sparse_kernels=True)
+    model = ThreeFeedforward(256, 256, use_sparse_kernels=True)
     #model = Feedforward(1024, 512, use_sparse_kernels=True)
 
     # Prune weight
-    prune_w = 0.8
+    prune_w = 0.4
     prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
+    prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
+    prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
 
     criterion = torch.nn.BCELoss()
     optimizer = torch.optim.SGD(model.parameters(), lr = 0.01)
@@ -147,6 +172,9 @@ if __name__ == "__main__":
     epoch = 20
 
     ts = time.perf_counter()
+
+    
+
     for epoch in range(epoch):
         ts_epoch = time.perf_counter()
         tic = time.perf_counter()
@@ -175,7 +203,7 @@ if __name__ == "__main__":
     plt.ylabel("Loss")
     plt.title(f"Loss {te-ts:.2f}s")
 
-    plt.savefig(f"loss_{str(prune_w).replace('.','_')}.png")
+    plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
 
     """
     model.eval()
