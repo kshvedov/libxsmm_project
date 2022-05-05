@@ -286,9 +286,9 @@ at::Tensor mlp_sparse_forward(
   auto K = nbk * bk;
 
   printf("\n\nmlp_sparse_forward\n\n");
-  printf("input shape: (%d, %d)\n", N, C);
-  printf("weight shape: (%d, %d)\n", C, K);
-  printf("output shape: (%d, %d)\n", N, K);
+  //printf("input shape: (%d, %d)\n", N, C);
+  //printf("weight shape: (%d, %d)\n", C, K);
+  //printf("output shape: (%d, %d)\n", N, K);
   libxsmm_dnn_err_t global_status;
   libxsmm_dnn_fullyconnected* libxsmm_handle = (libxsmm_dnn_fullyconnected*)libxsmm_handle_;
 
@@ -591,9 +591,9 @@ at::Tensor mlp_sparse_backward(
   int nb = 16; // or 32
 
   printf("\n\nmlp_sparse_backward\n\n");
-  printf("input shape: (%d, %d)\n", N, C);
-  printf("weight shape: (%d, %d)\n", C, K);
-  printf("grad_output shape: (%d, %d)\n", N, K);
+  //printf("input shape: (%d, %d)\n", N, C);
+  //printf("weight shape: (%d, %d)\n", C, K);
+  //printf("grad_output shape: (%d, %d)\n", N, K);
 
   /* Declare return variables */
   auto grad_input = at::empty(input.sizes(), input.options());
@@ -811,9 +811,9 @@ at::Tensor mlp_sparse_update(
   int nb = 16; // or 32
 
   printf("\n\n mlp sparse update \n\n");
-  printf("input shape: (%d, %d)\n", N, C);
-  printf("weight shape: (%d, %d)\n", C, K);
-  printf("grad_output shape: (%d, %d)\n", N, K);
+  //printf("input shape: (%d, %d)\n", N, C);
+  //printf("weight shape: (%d, %d)\n", C, K);
+  //printf("grad_output shape: (%d, %d)\n", N, K);
 
   /* # # # # # BUG # # # # # */
   // Times test required

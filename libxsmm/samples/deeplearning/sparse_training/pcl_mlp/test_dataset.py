@@ -6,6 +6,8 @@ import numpy as np
 from copy import deepcopy as dc
 import matplotlib.pyplot as plt
 
+from collections import Counter
+
 from torch.nn.utils import prune 
 
 from sklearn.datasets import make_blobs
@@ -50,27 +52,31 @@ def blob_label(y, label, loc): # assign labels
 if __name__ == "__main__":
     print("Loading Data")
     t = time.perf_counter()
-    data = np.load("IMDB.npz")
+    data = np.load("IMDB_8k_128.npz")
     print(f"Time to load: {time.perf_counter()-t:.4f}s")
     print("Getting Data")
     t = time.perf_counter()
-    data = data["arr_0"]
+    x = data["x"]
+    y = data["y"]
     print(f"Time to get data: {time.perf_counter()-t:.4f}s")
     t = time.perf_counter()
-    print(data[0])
-    print(data.size)
+    print(y[0], x[0])
     print(f"Time to get line in data: {time.perf_counter()-t:.4f}s")
+    print(f"y: {len(y)}, x: {len(x)}, {len(x[0])}")
     print("Load Complete...\n")
     #input("Press Enter\n")
 
-    x, y = data[:,1:], data[:,:1].flatten()
-    print(f"X shape: {x.shape}")
-    print(x[:5])
-    print(f"Y shape: {y.shape}")
-    print(y[:5])
+    #x, y = data[:,1:], data[:,:1].flatten()
+    #print(f"X shape: {x.shape}")
+    #print(x[:5])
+    #print(f"Y shape: {y.shape}")
+    #print(y[:5])
     #input("...")
     #x, y = make_blobs(n_samples=320, n_features=256, cluster_std=1.5, shuffle=True)
-    x_train, x_test, y_train, y_test = x[:25_000], x[25_000:30_000], y[:25_000], y[25_000:30_000]
+    r_train = [0, 40_000]
+    r_test = [40_000, 50_000]
+
+    x_train, x_test, y_train, y_test = x[r_train[0]:r_train[1]], x[r_test[0]:r_test[1]], y[r_train[0]:r_train[1]], y[r_test[0]:r_test[1]]
     #x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
     yd_train = dc(y_train)
 
@@ -93,21 +99,22 @@ if __name__ == "__main__":
 
     use_sparse = False
     # Test with sparse_kernels
-    model = ThreeFeedforward(8185, 8185, use_sparse_kernels=use_sparse)
+    model = ThreeFeedforward(128, 128, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(256, 256, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(256, 256, use_sparse_kernels=True)
     #model = Feedforward(1024, 512, use_sparse_kernels=True)
 
     # Prune weight
     if use_sparse:
-        prune_w = 0.4
+        prune_w = 0.7
         prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
         prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
         prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
 
-    criterion = torch.nn.BCELoss()
-    #optimizer = torch.optim.SGD(model.parameters(), lr = 0.005)
-    optimizer = torch.optim.ADAM(model.parameters(), lr = 0.001)
+    #criterion = torch.nn.BCELoss()
+    criterion = torch.nn.BCEWithLogitsLoss()
+    #optimizer = torch.optim.SGD(model.parameters(), lr = 0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr = 0.01)
 
     #print("Here")
 
@@ -115,9 +122,11 @@ if __name__ == "__main__":
     acc_save = []
 
     model.train()
-    epoch = 100
+    epoch = 20
 
     #print("Here")
+    count = Counter(y[r_train[0]:r_train[1]])
+    print(f"Element count of y_train: {count} 0:{(count[0]/(r_train[1]-r_train[0]))*100:.2f}%, 1:{(count[1]/(r_train[1]-r_train[0]))*100:.2f}%")
 
     ts = time.perf_counter()
     for epoch in range(epoch):
@@ -132,11 +141,13 @@ if __name__ == "__main__":
         te_epoch = time.perf_counter()
 
         y_m = y_pred.cpu().detach().numpy().flatten()
-        y_m = np.where(y_m>0.5, 1, 0)
-        acc_save.append(np.count_nonzero(y_m==yd_train)/25_000)
+        y_m2 = np.where(y_m>0.5, 1, 0)
+        acc_save.append(np.count_nonzero(y_m2==yd_train)/(r_train[1]-r_train[0]))
         print(f"Accuracy: {acc_save[-1]}")
 
         #print("Here")
+        #print(f"Element count of y_pred: {Counter(y_m)}")
+        print(f"y_pred: [{min(y_m)}, {max(y_m)}], y_train: [{min(y_train)}, {max(y_train)}]")
         
         loss = criterion(y_pred.squeeze(), y_train)
                             
@@ -150,13 +161,14 @@ if __name__ == "__main__":
         print()
 
         if (epoch+1)%10 == 0:
+            plt.clf()
             plt.plot(list(range(1, epoch+2)), loss_save)
             plt.xlabel("Epoch #")
             plt.ylabel("Loss")
             plt.title(f"Loss {te-ts:.2f}s")
 
             #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
-            plt.savefig(f"test_IMBD_loss_epoch{epoch}.png")
+            plt.savefig(f"imdb_results/IMBD_8k_128_loss_epoch{epoch}.png")
 
             plt.clf()
 
@@ -166,7 +178,7 @@ if __name__ == "__main__":
             plt.title(f"Acc {te-ts:.2f}s")
 
             #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
-            plt.savefig(f"test_IMBD_acc_epoch{epoch}.png")
+            plt.savefig(f"imdb_results/IMBD_8k_128_acc_epoch{epoch}.png")
 
     te = time.perf_counter()
     print(f"Entire train time: {te-ts}, on average: {(te-ts)/epoch}")
@@ -177,7 +189,7 @@ if __name__ == "__main__":
     plt.title(f"Loss {te-ts:.2f}s")
 
     #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
-    plt.savefig(f"test_IMBD_loss.png")
+    plt.savefig(f"imdb_results/IMBD_8k_128_loss.png")
 
     plt.plot(list(range(1, 21)), acc_save)
     plt.xlabel("Epoch #")
@@ -185,4 +197,4 @@ if __name__ == "__main__":
     plt.title(f"Acc {te-ts:.2f}s")
 
     #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
-    plt.savefig(f"test_IMBD_acc.png")
+    plt.savefig(f"imdb_results/IMBD_8k_128_acc.png")
