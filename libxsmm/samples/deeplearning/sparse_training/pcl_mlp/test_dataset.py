@@ -28,7 +28,7 @@ class ThreeFeedforward(torch.nn.Module):
             self.fc3 = torch.nn.Linear(self.input_size, self.hidden_size)
         self.relu = torch.nn.ReLU()
         self.fc4 = torch.nn.Linear(self.hidden_size, 1)
-        self.sigmoid = torch.nn.Sigmoid()
+        #self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
         hidden = self.fc1(x)
@@ -37,7 +37,7 @@ class ThreeFeedforward(torch.nn.Module):
         relu = self.relu(hidden)
         # There is a possibility to swap relu to libxsmm version (needs testing)
         output = self.fc4(relu)
-        output = self.sigmoid(output)
+        #output = self.sigmoid(output)
         return output 
 
 
@@ -106,7 +106,8 @@ if __name__ == "__main__":
         prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
 
     criterion = torch.nn.BCELoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr = 0.005)
+    #optimizer = torch.optim.SGD(model.parameters(), lr = 0.005)
+    optimizer = torch.optim.ADAM(model.parameters(), lr = 0.001)
 
     #print("Here")
 

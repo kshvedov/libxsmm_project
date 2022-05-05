@@ -1,8 +1,11 @@
 import json
-from json import encoder
 import time
+import torch
 import numpy as np
+from json import encoder
+import tensorflow as tf
 import tensorflow_datasets as tfds
+from sklearn.utils import shuffle
 
 def Amazon_DataSet():
     types = ["books", "dvd", "electronics", "kitchen"]
@@ -108,8 +111,8 @@ def IMDB_8K_Data():
         for val in item["text"]:
             #data_x[i][val] += 1
             data[i][val] += 1
-        #print(data[i])
-        #input()
+        print(data[i])
+        input()
 
     #print("Saving to file")
     #np.save("IMDB.npy", data)
@@ -157,10 +160,10 @@ def IMBD_Load():
     print(f"Time to get line in data: {time.perf_counter()-t:.4f}s")
     print("Load Complete")
 
-def IMDB_Processed(bank):
+def IMDB_Processed(bank, max_param_size):
     print(f"Subword {bank}")
     # Loading data from tensorflow
-    dataset, info = tfds.load(f"imdb_reviews/subwords{bank}", with_info=True)
+    dataset, info = tfds.load(f"imdb_reviews/subwords{bank}", with_info=True, shuffle_files=False)
 
     #print(info.features["text"].encoder)
     #print(info.features["text"])
@@ -171,28 +174,62 @@ def IMDB_Processed(bank):
     print(f"Exact Vocab Size: {size}")
 
     # Both training and testing data is loaded (all with a label)
-    print(dataset["train"].as_numpy())
-    input("Waiting here")
-    #print("Loading Training Data")
-    #temp_data = list(dataset["train"].as_numpy_iterator())
-    #print("Loading Testing Data")
-    #temp_data += list(dataset["test"].as_numpy_iterator())
+    #print(list(tfds.as_numpy(dataset["train"]))[:5])
+    #input("Waiting here")
+    print("Loading Training Data")
+    temp_data = list(tfds.as_numpy(dataset["train"]))
+    print("Loading Testing Data")
+    temp_data += list(tfds.as_numpy(dataset["test"]))
 
+    max_len = 0
+    for i, item in enumerate(temp_data):
+        print(f"{i+1} out of 50 000\r", end="")
+        temp = len(item["text"])
+        if temp > max_len:
+            max_len = temp
+    print(f"\nMax len: {max_len}")
 
-
-
-    data = np.zeros((50_000, size+1), dtype="int64")
+    y = np.zeros(50_000, dtype="int64")
+    x = np.zeros((50_000, max_len), dtype="int64")
 
     for i, item in enumerate(temp_data):
-        print(f"{i+1} out of 50 000")
-        data[i][0] = item["label"]
-        for val in item["text"]:
-            data[i][val] += 1
+        print(f"{i+1} out of 50 000\r", end="")
+        y[i] = item["label"]
+        for j, val in enumerate(item["text"]):
+            x[i][j] = val
+    print("\nAll padded")
+    print(y[124:130])
+    print(x[124:130])
+    print("Suffle test:")
+    testx, testy = shuffle(x[124:130], y[124:130], random_state=13)
+    print(testy)
+    print(testx)
 
-    print("Saving to compressed file")
-    np.savez_compressed("IMDB.npz", data)
-    print("Done saving!")
+    x, y = shuffle(x, y, random_state=13)
 
+    out_sizes = [64]
+
+    while out_sizes[-1] < max_param_size:
+        out_sizes.append(out_sizes[-1]*2)
+
+    print(out_sizes)
+    input("Sizes OK?")
+
+    for s in out_sizes:
+        print(f"Working with size: {s}")
+        model = tf.keras.Sequential([
+          tf.keras.layers.Embedding(size+1, s),
+          tf.keras.layers.GlobalAveragePooling1D()])
+        model.compile()
+
+        model.summary()
+        out_x = model.predict(x)
+        print(out_x.shape)
+        print(out_x[0].shape)
+
+        print("Saving to compressed file")
+        np.savez_compressed(f"imdb_datasets/IMDB_{bank}_{s}.npz", x = out_x, y = y)
+        print(f"Done saving: IMDB_{bank}_{s}.npz")
     return
 
 
@@ -200,5 +237,5 @@ if __name__ == "__main__":
     #Amazon_DataSet()
     #IMDB_8K_Data()
     #IMBD_Load()
-    IMDB_Processed("8k")
-    IMDB_Processed("32k")
+    IMDB_Processed("8k", 4096)
+    IMDB_Processed("32k", 8192)

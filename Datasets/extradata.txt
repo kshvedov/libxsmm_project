@@ -1,3 +1,10 @@
 http://help.sentiment140.com/for-students/
 https://ai.stanford.edu/~amaas/data/sentiment/
 https://www.cs.jhu.edu/~mdredze/datasets/sentiment/
+
+Needed for later:
+https://pytorch.org/docs/stable/generated/torch.nn.BCELoss.html
+https://pytorch.org/docs/stable/generated/torch.optim.Adam.html#torch.optim.Adam
+
+https://studymachinelearning.com/tensorflow-text-classification-of-movie-reviews/
+https://medium.com/analytics-vidhya/understanding-embedding-layer-in-keras-bbe3ff1327ce
