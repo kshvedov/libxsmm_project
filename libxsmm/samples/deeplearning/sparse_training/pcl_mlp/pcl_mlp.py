@@ -295,8 +295,9 @@ class XsmmLinear(nn.Module):
         sparsity = torch.sum(wtensor == 0.) / float(n_el)
 
         # Change threshold to a smarter value
-        use_sparse_kernels = True if sparsity > 0.6 else False
-
+        #use_sparse_kernels = True if sparsity > 0.6 else False
+        use_sparse_kernels = True
+        
         output =  XsmmFC.apply(input, wtensor, btensor, self.xsmm_handle, use_sparse_kernels)
         if not self.output_stays_blocked:
             #output = output.permute(0, 2, 1, 3).view(self.N, self.K).contiguous()

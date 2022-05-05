@@ -157,9 +157,48 @@ def IMBD_Load():
     print(f"Time to get line in data: {time.perf_counter()-t:.4f}s")
     print("Load Complete")
 
+def IMDB_Processed(bank):
+    print(f"Subword {bank}")
+    # Loading data from tensorflow
+    dataset, info = tfds.load(f"imdb_reviews/subwords{bank}", with_info=True)
+
+    #print(info.features["text"].encoder)
+    #print(info.features["text"])
+    #print(info.features)
+    print(info)
+    #print(info.features["text"].encoder.subwords)
+    size = info.features["text"].encoder.vocab_size
+    print(f"Exact Vocab Size: {size}")
+
+    # Both training and testing data is loaded (all with a label)
+    print(dataset["train"].as_numpy())
+    input("Waiting here")
+    #print("Loading Training Data")
+    #temp_data = list(dataset["train"].as_numpy_iterator())
+    #print("Loading Testing Data")
+    #temp_data += list(dataset["test"].as_numpy_iterator())
+
+
+
+
+    data = np.zeros((50_000, size+1), dtype="int64")
+
+    for i, item in enumerate(temp_data):
+        print(f"{i+1} out of 50 000")
+        data[i][0] = item["label"]
+        for val in item["text"]:
+            data[i][val] += 1
+
+    print("Saving to compressed file")
+    np.savez_compressed("IMDB.npz", data)
+    print("Done saving!")
+
+    return
 
 
 if __name__ == "__main__":
     #Amazon_DataSet()
-    IMDB_8K_Data()
+    #IMDB_8K_Data()
     #IMBD_Load()
+    IMDB_Processed("8k")
+    IMDB_Processed("32k")

@@ -3,6 +3,7 @@ import torch
 import pcl_mlp
 import numpy as np
 
+from copy import deepcopy as dc
 import matplotlib.pyplot as plt
 
 from torch.nn.utils import prune 
@@ -69,8 +70,9 @@ if __name__ == "__main__":
     print(y[:5])
     #input("...")
     #x, y = make_blobs(n_samples=320, n_features=256, cluster_std=1.5, shuffle=True)
-    x_train, x_test, y_train, y_test = x[:1_000], x[25_000:25_200], y[:1_000], y[25_000:25_200]
+    x_train, x_test, y_train, y_test = x[:25_000], x[25_000:30_000], y[:25_000], y[25_000:30_000]
     #x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+    yd_train = dc(y_train)
 
     x_train = torch.FloatTensor(x_train)
     y_train = torch.FloatTensor(y_train)
@@ -104,14 +106,15 @@ if __name__ == "__main__":
         prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
 
     criterion = torch.nn.BCELoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr = 0.01)
+    optimizer = torch.optim.SGD(model.parameters(), lr = 0.005)
 
     #print("Here")
 
     loss_save = []
+    acc_save = []
 
     model.train()
-    epoch = 20
+    epoch = 100
 
     #print("Here")
 
@@ -120,12 +123,17 @@ if __name__ == "__main__":
         ts_epoch = time.perf_counter()
         tic = time.perf_counter()
         optimizer.zero_grad()
-        print("Here")
+        #print("Here")
         # Forward pass
         y_pred = model(x_train)
         # Compute Loss
-        print("Here")
+        #print("Here")
         te_epoch = time.perf_counter()
+
+        y_m = y_pred.cpu().detach().numpy().flatten()
+        y_m = np.where(y_m>0.5, 1, 0)
+        acc_save.append(np.count_nonzero(y_m==yd_train)/25_000)
+        print(f"Accuracy: {acc_save[-1]}")
 
         #print("Here")
         
@@ -140,6 +148,25 @@ if __name__ == "__main__":
         te = time.perf_counter()
         print()
 
+        if (epoch+1)%10 == 0:
+            plt.plot(list(range(1, epoch+2)), loss_save)
+            plt.xlabel("Epoch #")
+            plt.ylabel("Loss")
+            plt.title(f"Loss {te-ts:.2f}s")
+
+            #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
+            plt.savefig(f"test_IMBD_loss_epoch{epoch}.png")
+
+            plt.clf()
+
+            plt.plot(list(range(1, epoch+2)), acc_save)
+            plt.xlabel("Epoch #")
+            plt.ylabel("Acc")
+            plt.title(f"Acc {te-ts:.2f}s")
+
+            #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
+            plt.savefig(f"test_IMBD_acc_epoch{epoch}.png")
+
     te = time.perf_counter()
     print(f"Entire train time: {te-ts}, on average: {(te-ts)/epoch}")
 
@@ -150,3 +177,11 @@ if __name__ == "__main__":
 
     #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
     plt.savefig(f"test_IMBD_loss.png")
+
+    plt.plot(list(range(1, 21)), acc_save)
+    plt.xlabel("Epoch #")
+    plt.ylabel("Acc")
+    plt.title(f"Acc {te-ts:.2f}s")
+
+    #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
+    plt.savefig(f"test_IMBD_acc.png")
