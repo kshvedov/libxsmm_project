@@ -8,8 +8,10 @@ import matplotlib.pyplot as plt
 
 from collections import Counter
 
+import torchvision
 from torch.nn.utils import prune 
 import torch.nn.functional as F
+import torchvision.transforms as transforms
 
 from sklearn.datasets import make_blobs
 from sklearn.model_selection import train_test_split
@@ -22,12 +24,13 @@ class ThreeFeedforward(torch.nn.Module):
         super(ThreeFeedforward, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
+        self.fc0 = torch.nn.Linear(self.input_size, self.hidden_size)
         if use_sparse_kernels:
-            self.fc1 = pcl_mlp.XsmmLinear(input_size, hidden_size)
+            self.fc1 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
             self.fc2 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
             self.fc3 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
         else:
-            self.fc1 = torch.nn.Linear(self.input_size, self.hidden_size)
+            self.fc1 = torch.nn.Linear(self.hidden_size, self.hidden_size)
             self.fc2 = torch.nn.Linear(self.hidden_size, self.hidden_size)
             self.fc3 = torch.nn.Linear(self.hidden_size, self.hidden_size)
         #self.relu = torch.nn.ReLU()
@@ -37,7 +40,10 @@ class ThreeFeedforward(torch.nn.Module):
         self.droput = torch.nn.Dropout(0.2)
 
     def forward(self, x):
-        hidden = self.fc1(torch.flatten(x, start_dim=1))
+        hidden = self.fc0(torch.flatten(x, start_dim=1))
+        hidden = F.relu(hidden)
+
+        hidden = self.fc1(hidden)
         hidden = F.relu(hidden)
         #hidden = self.droput(hidden)
         hidden = self.fc2(hidden)
@@ -52,59 +58,8 @@ class ThreeFeedforward(torch.nn.Module):
 
 if __name__ == "__main__":
     print("Loading Data")
-    # t = time.perf_counter()
-    # data = np.load("MNIST.npz")
-    # print(f"Time to load: {time.perf_counter()-t:.4f}s")
-    # print("Getting Data")
-    # t = time.perf_counter()
-    # x = data["x"]
-    # y = data["y"]
-
-    # new_x = []
-    # new_y = []
-
-    # for i, item in enumerate(y):
-    #     if item == 0 or item == 1:
-    #         new_y.append(item)
-    #         new_x.append(x[i])
-
-    # print(f"Size of two vars: {len(new_y)}")
-
-    # print(f"Time to get data: {time.perf_counter()-t:.4f}s")
-    # t = time.perf_counter()
-    # #print(y[0], x[0])
-    # print(f"Time to get line in data: {time.perf_counter()-t:.4f}s")
-    # print(f"y: {len(y)}, x: {len(x)}, {len(x[0])}")
-    # print("Load Complete...\n")
-
-    # r_train = [0, 60_000]
-    # r_test = [60_000, 70_000]
-
-    # # Binarising labels
-    # print("One hot encoding")
-    # print(f"Before:{y[:3]}")
-    # lb = LB()
-    # lb.fit(range(10))
-    # yb = dc(y)
-    # y = lb.transform(y)
-    # print(f"After: {y[:3]}")
-
-    # x_train, x_test, y_train, y_test = x[r_train[0]:r_train[1]], x[r_test[0]:r_test[1]], y[r_train[0]:r_train[1]], y[r_test[0]:r_test[1]]
-    # yd_train = dc(y_train)
-
-    # x_train = torch.FloatTensor(x_train)
-    # y_train = torch.FloatTensor(y_train)
-
-    # x_test = torch.FloatTensor(x_test)
-    # y_test = torch.FloatTensor(y_test)
-    # yb_test = torch.FloatTensor(yb[r_test[0]:r_test[1]])
-
 
     # Load train / test dataset for MNIST
-    import torchvision
-    import torchvision.transforms as transforms
-
-
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5), (0.5))
@@ -115,12 +70,12 @@ if __name__ == "__main__":
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=2)
     testloader = torch.utils.data.DataLoader(testset, batch_size=256, shuffle=True, num_workers=2)    
     
-    use_sparse = False
+    use_sparse = True
     model = ThreeFeedforward(784, 256, use_sparse_kernels=use_sparse)
 
     # Prune weight
     if use_sparse:
-        prune_w = 0.5
+        prune_w = 0.8
         prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
         prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
         prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
@@ -131,42 +86,45 @@ if __name__ == "__main__":
     optimizer = torch.optim.SGD(model.parameters(), lr = 0.005)
     #optimizer = torch.optim.Adam(model.parameters(), lr = 0.01)
 
-    #print("Here")
-
     loss_save = []
     acc_save = []
 
     model.train()
-    epoch = 20
-
-    #print("Here")
-    # count = Counter(yb[r_train[0]:r_train[1]])
-    # print(f"Element count of y_train: {count} 0:{(count[0]/(r_train[1]-r_train[0]))*100:.2f}%, 1:{(count[1]/(r_train[1]-r_train[0]))*100:.2f}%")
-
+    epoch_count = 20
 
     ts = time.perf_counter()
-    for epoch in range(epoch):
+    for epoch in range(epoch_count):
         train_loss = 0
         valid_loss = 0
 
+        tot_time = 0
+        #with torch.profiler.profile(with_stack = True, profile_memory = True, with_modules = True) as prof:
+        #with torch.profiler.profile(with_stack = True, profile_memory = True) as prof:
         for i, data in enumerate(trainloader, 0):
+            print(f"{i}/")
             inputs, labels = data 
-
-        # ts_epoch = time.perf_counter()
-        # tic = time.perf_counter()
+            # ts_epoch = time.perf_counter()
+            # tic = time.perf_counter()
+            ts_epoch = time.perf_counter()
             optimizer.zero_grad()
-        # Forward pass
+            # Forward pass
             y_pred = model(inputs)
-        # Compute Loss
-        # te_epoch = time.perf_counter()
+            # Compute Loss
+            # te_epoch = time.perf_counter()
 
-        #Loss calculated
+            #Loss calculated
             loss = criterion(y_pred, labels)
 
             loss.backward()
             optimizer.step()
+            te_epoch = time.perf_counter()
         
+            # Backward pass
             train_loss += loss.item() * len(inputs)
+            tot_time += te_epoch - ts_epoch
+        print()
+
+        #print(prof.key_averages(group_by_stack_n=5).table(sort_by='self_cpu_time_total', row_limit=5))
 
         ##############################################
         #y_m = y_pred.cpu().detach().numpy()
@@ -189,13 +147,11 @@ if __name__ == "__main__":
 
         #     print(f"Acc: {(correct/(r_test[1]-r_test[0]))*100}%")
 
-        loss_save.append(train_loss)
+        loss_save.append(train_loss/len(trainloader.sampler))
         ##############################################
 
         # print(f'Epoch {epoch}: train loss: {loss.item()}, valid loss: {train_loss}, duration: {te_epoch - ts_epoch}')
-        print(f'Epoch {epoch}: train loss: {loss.item()}, valid loss: {train_loss}, duration: {0.0}')
-
-        # Backward pass
+        print(f'Epoch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/len(trainloader.sampler)}, duration: {tot_time}s')
 
         te = time.perf_counter()
         print()
@@ -208,7 +164,7 @@ if __name__ == "__main__":
             plt.title(f"Loss {te-ts:.2f}s")
 
             #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
-            plt.savefig(f"mnist_results/mnist_full_epoch{epoch}.png")
+            plt.savefig(f"mnist_results/mnist_0.8_{epoch}.png")
 
             # plt.clf()
 
@@ -223,18 +179,19 @@ if __name__ == "__main__":
     te = time.perf_counter()
     print(f"Entire train time: {te-ts}, on average: {(te-ts)/epoch}")
 
-    plt.plot(list(range(1, 21)), loss_save)
+    plt.clf()
+    plt.plot(list(range(1, epoch_count+1)), loss_save)
     plt.xlabel("Epoch #")
     plt.ylabel("Loss")
     plt.title(f"Loss {te-ts:.2f}s")
 
     #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
-    plt.savefig(f"imdb_results/IMBD_8k_128_loss.png")
+    plt.savefig(f"mnist_results/mnist_0.8final_{epoch_count}epochs.png")
 
-    plt.plot(list(range(1, 21)), acc_save)
-    plt.xlabel("Epoch #")
-    plt.ylabel("Acc")
-    plt.title(f"Acc {te-ts:.2f}s")
+    # plt.plot(list(range(1, 21)), acc_save)
+    # plt.xlabel("Epoch #")
+    # plt.ylabel("Acc")
+    # plt.title(f"Acc {te-ts:.2f}s")
 
-    #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
-    plt.savefig(f"imdb_results/IMBD_8k_128_acc.png")
+    # #plt.savefig(f"test1_loss_{str(prune_w).replace('.','_')}.png")
+    # plt.savefig(f"imdb_results/IMBD_8k_128_acc.png")
