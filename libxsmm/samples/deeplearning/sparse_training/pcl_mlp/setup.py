@@ -3,13 +3,13 @@ from setuptools import setup
 from torch.utils.cpp_extension import CppExtension, BuildExtension
 
 # Surface
-#LIBXSMM_ROOT_PATH="/home/kaotixs/libxsmm_project/libxsmm/"
+LIBXSMM_ROOT_PATH="/home/kaotixs/libxsmm_project/libxsmm/"
 
 # Azure
 #LIBXSMM_ROOT_PATH="/home/kshvedov/thesis/libxsmm_project/libxsmm/"
 
 # PC
-LIBXSMM_ROOT_PATH="/root/libxsmm_project/libxsmm/"
+#LIBXSMM_ROOT_PATH="/root/libxsmm_project/libxsmm/"
 
 setup(name='pcl_mlp',
       py_modules = ['pcl_mlp'],
