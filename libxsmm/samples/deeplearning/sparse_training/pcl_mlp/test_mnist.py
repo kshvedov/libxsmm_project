@@ -67,23 +67,23 @@ if __name__ == "__main__":
     trainset = torchvision.datasets.MNIST(root="./tmp", train=True, download=True, transform=transform)
     testset = torchvision.datasets.MNIST(root="./tmp", train=False, download=True, transform=transform)
 
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=2)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=256, shuffle=True, num_workers=2)    
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=1024//4, shuffle=True, num_workers=2)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=1024//4, shuffle=True, num_workers=2)    
     
-    use_sparse = True
+    use_sparse = False
     model = ThreeFeedforward(784, 256, use_sparse_kernels=use_sparse)
 
     # Prune weight
-    if use_sparse:
-        prune_w = 0.8
-        prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
-        prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
-        prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
+    # if use_sparse:
+    prune_w = 0.8
+    prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
+    prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
+    prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
 
     #criterion = torch.nn.BCELoss()
     criterion = torch.nn.CrossEntropyLoss()
     #criterion = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr = 0.005)
+    optimizer = torch.optim.SGD(model.parameters(), lr = 0.01)
     #optimizer = torch.optim.Adam(model.parameters(), lr = 0.01)
 
     loss_save = []
@@ -101,27 +101,31 @@ if __name__ == "__main__":
         #with torch.profiler.profile(with_stack = True, profile_memory = True, with_modules = True) as prof:
         #with torch.profiler.profile(with_stack = True, profile_memory = True) as prof:
         for i, data in enumerate(trainloader, 0):
-            print(f"{i}/")
-            inputs, labels = data 
-            # ts_epoch = time.perf_counter()
-            # tic = time.perf_counter()
-            ts_epoch = time.perf_counter()
-            optimizer.zero_grad()
-            # Forward pass
-            y_pred = model(inputs)
-            # Compute Loss
-            # te_epoch = time.perf_counter()
+            #print(len(data[0]))
+            if len(data[0]) == 1024//4:
+                #print((f"{i} ")*100)
+                inputs, labels = data 
+                # ts_epoch = time.perf_counter()
+                # tic = time.perf_counter()
+                ts_epoch = time.perf_counter()
+                optimizer.zero_grad()
+                # Forward pass
+                y_pred = model(inputs)
+                # Compute Loss
+                # te_epoch = time.perf_counter()
 
-            #Loss calculated
-            loss = criterion(y_pred, labels)
+                #Loss calculated
+                loss = criterion(y_pred, labels)
 
-            loss.backward()
-            optimizer.step()
-            te_epoch = time.perf_counter()
-        
-            # Backward pass
-            train_loss += loss.item() * len(inputs)
-            tot_time += te_epoch - ts_epoch
+                loss.backward()
+                optimizer.step()
+                te_epoch = time.perf_counter()
+            
+                # Backward pass
+                train_loss += loss.item() * len(inputs)
+                tot_time += te_epoch - ts_epoch
+
+                #print(f'Batch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/(i+1)}, duration: {tot_time}s')
         print()
 
         #print(prof.key_averages(group_by_stack_n=5).table(sort_by='self_cpu_time_total', row_limit=5))
@@ -152,6 +156,9 @@ if __name__ == "__main__":
 
         # print(f'Epoch {epoch}: train loss: {loss.item()}, valid loss: {train_loss}, duration: {te_epoch - ts_epoch}')
         print(f'Epoch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/len(trainloader.sampler)}, duration: {tot_time}s')
+        f = open("temp_results.txt", "a")
+        print(f'Epoch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/len(trainloader.sampler)}, duration: {tot_time}s', file = f)
+        f.close()
 
         te = time.perf_counter()
         print()
