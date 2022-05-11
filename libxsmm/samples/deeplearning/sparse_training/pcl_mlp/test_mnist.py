@@ -54,7 +54,25 @@ class ThreeFeedforward(torch.nn.Module):
         # There is a possibility to swap relu to libxsmm version (needs testing)
         output = self.fc4(hidden)
         #output = self.sigmoid(output)
-        return output 
+        return output
+
+def PBS(count, total, name = ""):
+    bar_len = 40
+    filled_len = int(round(bar_len * count / float(total)))
+
+    perc = round(100.0 * count / float(total), 1)
+    if filled_len > 0:
+        char = ">"
+        if filled_len == bar_len:
+            char = "■"
+        bar = "■" * (filled_len - 1) + char + '.' * (bar_len - filled_len)
+    else:
+        bar = '.' * (bar_len - filled_len)
+
+    if len(name) != 0:
+        name += " "
+
+    return (f"{name}[{bar}] {count}/{total} --> {perc}%")
 
 if __name__ == "__main__":
     print("Loading Data")
@@ -70,7 +88,7 @@ if __name__ == "__main__":
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=1024//4, shuffle=True, num_workers=2)
     testloader = torch.utils.data.DataLoader(testset, batch_size=1024//4, shuffle=True, num_workers=2)    
     
-    use_sparse = False
+    use_sparse = True
     model = ThreeFeedforward(784, 256, use_sparse_kernels=use_sparse)
 
     # Prune weight
@@ -98,6 +116,7 @@ if __name__ == "__main__":
         valid_loss = 0
 
         tot_time = 0
+        tot_len = len(trainloader)
         #with torch.profiler.profile(with_stack = True, profile_memory = True, with_modules = True) as prof:
         #with torch.profiler.profile(with_stack = True, profile_memory = True) as prof:
         for i, data in enumerate(trainloader, 0):
@@ -124,6 +143,7 @@ if __name__ == "__main__":
                 # Backward pass
                 train_loss += loss.item() * len(inputs)
                 tot_time += te_epoch - ts_epoch
+                print(f"{PBS(i, tot_len, 'Training Epoch')}, tot loss: {train_loss:.5f}, time:{tot_time}", end = "\r")
 
                 #print(f'Batch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/(i+1)}, duration: {tot_time}s')
         print()

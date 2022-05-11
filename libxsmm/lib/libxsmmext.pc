@@ -3,7 +3,7 @@ Description: LIBXSMM/multithreaded for OpenMP
 URL: https://github.com/libxsmm/libxsmm/
 Version: 1.17.0
 
-prefix=/home/kshvedov/libxsmm_project/libxsmm
+prefix=/root/libxsmm_project/libxsmm
 includedir=${prefix}/include
 libdir=${prefix}/lib
 
