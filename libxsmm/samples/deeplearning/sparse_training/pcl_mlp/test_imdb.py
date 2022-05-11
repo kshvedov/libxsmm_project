@@ -79,7 +79,8 @@ def PBS(count, total, name = ""):
 if __name__ == "__main__":
     print("Loading Data")
     t = time.perf_counter()
-    data = np.load("/root/imdb_datasets/IMDB_32k_8192.npz")
+    #data = np.load("/root/imdb_datasets/IMDB_8k_1024.npz")
+    data = np.load("/home/kshvedov/imdb_datasets/IMDB_8k_1024.npz")
     print(f"Time to load: {time.perf_counter()-t:.4f}s")
     print("Getting Data")
     t = time.perf_counter()
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     testloader = torch.utils.data.DataLoader(testset, batch_size=1024//4, shuffle=True, num_workers=2)    
     
     use_sparse = True
-    model = ThreeFeedforward(8192, 8192, use_sparse_kernels=use_sparse)
+    model = ThreeFeedforward(1024, 1024, use_sparse_kernels=use_sparse)
 
     # Prune weight
     #if use_sparse:
@@ -186,6 +187,8 @@ if __name__ == "__main__":
                 train_loss += round_loss
                 tot_time += te_epoch - ts_epoch
             print(f"{PBS(i, tot_len, 'Training Epoch')}, tot loss: {train_loss:.5f}, loss: {round_loss/len(data[0]):.5f}, acc: {round_acc/len(data[0]):.3f}", end = "\r")
+            print()
+            exit(0)
 
                 #print(f'Batch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/(i+1)}, duration: {tot_time}s')
         print()
