@@ -276,6 +276,7 @@ at::Tensor mlp_sparse_forward(
     torch::Tensor bias)
 {
   using namespace std::chrono;
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   //typedef std::chrono::high_resolution_clock Clock;
   auto nbn = input.size(0);
   auto nbc = input.size(1);
@@ -290,7 +291,10 @@ at::Tensor mlp_sparse_forward(
   auto C = nbc * bc;
   auto K = nbk * bk;
 
+  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  duration<double> total_time = duration_cast<duration<double>>(t2 - t1);
   printf("\n\nmlp_sparse_forward\n\n");
+  t1 = high_resolution_clock::now();
   //printf("input shape: (%d, %d)\n", N, C);
   //printf("weight shape: (%d, %d)\n", C, K);
   //printf("output shape: (%d, %d)\n", N, K);
@@ -311,15 +315,16 @@ at::Tensor mlp_sparse_forward(
   float *l_B = (float *)libxsmm_aligned_malloc(sizeof(float) * C * K, 64);
   float *l_C = (float *)libxsmm_aligned_malloc(sizeof(float) * N * K, 64);
 
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
   int l_n, l_c, l_nn, l_cc, l_nnn;
   LIBXSMM_VLA_DECL(5, float, l_p_A, l_A, C / CB, NB / nb, CB, nb);
   LIBXSMM_VLA_DECL(5, float, l_p_C, l_C, K / KB, NB / nb, KB, nb);
   // LIBXSMM_VLA_DECL(5, float, l_p_C_gold, l_C_gold, K / KB, NB / nb, KB, 16);
 
-  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  t2 = high_resolution_clock::now();
   duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.1 time: %lf\n", time_span);
+  printf("Section 1 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
 
   // auto input_ = input.permute({0, 2, 1, 3}).reshape({N, C});
 
@@ -348,7 +353,8 @@ at::Tensor mlp_sparse_forward(
   }
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.2 time: %lf\n", time_span);
+  printf("Section 2 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
 
   // printf("\n\n\nA created, number of elements: %d \n\n\n", aa);
 
@@ -375,7 +381,8 @@ at::Tensor mlp_sparse_forward(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.3 time: %lf\n", time_span);
+  printf("Section 3 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
  /* touch dense B and init sparse B*/
@@ -386,7 +393,8 @@ at::Tensor mlp_sparse_forward(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.3.1 time: %lf\n", time_span);
+  printf("Section 4 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   for (l_k = 0; l_k < K; l_k++) {
@@ -411,7 +419,8 @@ at::Tensor mlp_sparse_forward(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.4 time: %lf\n", time_span);
+  printf("Section 5 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   // Seems to work correctly
@@ -436,7 +445,8 @@ at::Tensor mlp_sparse_forward(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.5 time: %lf\n", time_span);
+  printf("Section 6 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   unsigned num_k_blocks = K / KB;
@@ -466,9 +476,10 @@ at::Tensor mlp_sparse_forward(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1 time: %lf\n", time_span);
-
+  printf("Section 7 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
+
   /* Create FWD kernels */
   float alpha = 1.0;
   float beta = 1.0;
@@ -492,8 +503,8 @@ at::Tensor mlp_sparse_forward(
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
   //total_time += time_span;
-  printf("Section 2 time: %lf (kernel creation)\n", time_span);
-
+  printf("Section 8 time: %lf (kernel creation)\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
   // Execute kernels amoung threads
   int k, n, c;
@@ -516,8 +527,8 @@ at::Tensor mlp_sparse_forward(
 t2 = high_resolution_clock::now();
 time_span = duration_cast<duration<double>>(t2 - t1);
 //total_time += time_span;
-printf("Section 3 time: %lf (kernel execution)\n", time_span);
-
+printf("Section 9 time: %lf (kernel execution)\n", time_span);
+total_time = total_time + duration_cast<duration<double>>(t2 - t1);
 
 t1 = high_resolution_clock::now();
 /* Why doesn't this work?
@@ -549,6 +560,12 @@ t1 = high_resolution_clock::now();
 
   auto output = _output.reshape({N, K});
 
+t2 = high_resolution_clock::now();
+time_span = duration_cast<duration<double>>(t2 - t1);
+printf("Section 10 time: %lf (kernel execution)\n", time_span);
+total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+t1 = high_resolution_clock::now();
+
 {
 RECORD_FUNCTION("xsmm_mm_fwd", std::vector<c10::IValue>({input, weight}), -1 /*torch::autograd::Node::peek_at_next_sequence_nr()*/);
 #ifdef _OPENMP
@@ -578,8 +595,9 @@ RECORD_FUNCTION("xsmm_mm_fwd", std::vector<c10::IValue>({input, weight}), -1 /*t
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
   //total_time += time_span;
-  printf("Section 4 time: %lf\n", time_span);
-  //printf("Total time: %lf\n", total_time);
+  printf("Section 11 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  printf("Total time: %lf\n", total_time);
   return output;
 
 }
@@ -632,6 +650,7 @@ at::Tensor mlp_sparse_backward(
     torch::Tensor weight)
 {
   using namespace std::chrono;
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   libxsmm_dnn_err_t global_status;
   auto nbn = input.size(0);
   auto nbc = input.size(1);
@@ -652,7 +671,10 @@ at::Tensor mlp_sparse_backward(
 
   int nb = 16; // or 32
 
+  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  duration<double> total_time = duration_cast<duration<double>>(t2 - t1);
   printf("\n\nmlp_sparse_backward\n\n");
+  t1 = high_resolution_clock::now();
   //printf("input shape: (%d, %d)\n", N, C);
   //printf("weight shape: (%d, %d)\n", C, K);
   //printf("grad_output shape: (%d, %d)\n", N, K);
@@ -678,7 +700,11 @@ at::Tensor mlp_sparse_backward(
 RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}), -1 /*torch::autograd::Node::peek_at_next_sequence_nr()*/);
 }
 
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+  t2 = high_resolution_clock::now();
+  duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 0 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  t1 = high_resolution_clock::now();
   // Converting A to 5 dim
   int aa = 0;
   for (l_n = 0; l_n < N / NB; ++l_n) {
@@ -698,9 +724,10 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
       }
   }
 
-  high_resolution_clock::time_point t2 = high_resolution_clock::now();
-  duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.1 time: %lf\n", time_span);
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 1 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   int cc = 0;
@@ -723,7 +750,8 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.2 time: %lf\n", time_span);
+  printf("Section 2 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   // Create sparse B
@@ -733,6 +761,13 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
   // K rows x C columns
   auto weight_transpose = weight.permute({1, 2, 0, 3}).reshape({C, K}).transpose(0, 1);
   unsigned int *colptr = (unsigned int *)libxsmm_aligned_malloc((C + 1) * sizeof(unsigned int), 64);
+    
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 3 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  t1 = high_resolution_clock::now();
+
   colptr[0] = 0;
   for (l_c = 0; l_c < C; l_c++) {
       colptr[l_c + 1] = 0;
@@ -749,15 +784,28 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.3 time: %lf\n", time_span);
+  printf("Section 4 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   for (l_c = 0; l_c < C; l_c++) {
       colptr[l_c + 1] += colptr[l_c];
   }
 
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 5 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  t1 = high_resolution_clock::now();
+
   unsigned int *rowidx =
       (unsigned int *)libxsmm_aligned_malloc(nnz * sizeof(unsigned int), 64);
+
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 6 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  t1 = high_resolution_clock::now();
 
   float *values = (float *)libxsmm_aligned_malloc(nnz * sizeof(float), 64);
   for (l_c = 0; l_c < C; l_c++) {
@@ -775,7 +823,8 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.4 time: %lf\n", time_span);
+  printf("Section 7 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   int num_blocks = num_k_blocks * num_c_blocks;
@@ -803,10 +852,8 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  //duration<double> total_time = duration_cast<duration<double>>(0);
-  //total_time += time_span;
-  printf("Section 1 time: %lf\n", time_span);
-
+  printf("Section 8 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
   /* Create FWD kernels */
   float alpha = 1.0;
@@ -829,10 +876,10 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
   }
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  //total_time += time_span;
-  printf("Section 2 time: %lf (create kernels)\n", time_span);
-
+  printf("Section 9 time: %lf (create kernels)\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
+
   //printf("Executing kernels\n");
   // Execute kernels amoung threads
   int k, n, c;
@@ -853,11 +900,18 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  //total_time += time_span;
-  printf("Section 3 time: %lf (execute kernels)\n", time_span);
-
+  printf("Section 10 time: %lf (execute kernels)\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
+
   auto grad_input_temp = grad_input.permute({0,2,1,3}).reshape({N,C});
+
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 11 time: %lf (execute kernels)\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  t1 = high_resolution_clock::now();
+
   // Write results back to output
   // nbn nbc bn bc
 
@@ -884,9 +938,9 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  //total_time += time_span;
-  printf("Section 4 time: %lf\n", time_span);
-  //printf("Total time: %lf\n", total_time);
+  printf("Section 12 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  printf("Total time: %lf\n", total_time);
 
   return grad_input_temp.reshape({nbn, bn, nbc, bc}).permute({0, 2, 1, 3});
 
@@ -898,6 +952,7 @@ at::Tensor mlp_sparse_update(
     torch::Tensor weight)
 {
   using namespace std::chrono;
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   libxsmm_dnn_err_t global_status;
 
   auto nbn = input.size(0);
@@ -918,8 +973,10 @@ at::Tensor mlp_sparse_update(
   int KB = bk;
 
   int nb = 16; // or 32
-
+  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  duration<double> total_time = duration_cast<duration<double>>(t2 - t1);
   printf("\n\n mlp sparse update \n\n");
+  t1 = high_resolution_clock::now();
   //printf("input shape: (%d, %d)\n", N, C);
   //printf("weight shape: (%d, %d)\n", C, K);
   //printf("grad_output shape: (%d, %d)\n", N, K);
@@ -956,8 +1013,11 @@ at::Tensor mlp_sparse_update(
   LIBXSMM_VLA_DECL(5, float, l_p_input, l_input, C / CB, NB / nb, CB, nb);
   LIBXSMM_VLA_DECL(5, float, l_p_grad_output, l_grad_output, K / KB, NB / nb, KB, nb);
 
-
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+  t2 = high_resolution_clock::now();
+  duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 0 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  t1 = high_resolution_clock::now();
   /* touch l_input - identical to forward pass - except it is transposed */
   for (int l_n = 0; l_n < N / NB; ++l_n) {
       for (int l_c = 0; l_c < C / CB; ++l_c) {
@@ -981,9 +1041,10 @@ at::Tensor mlp_sparse_update(
       }
   }
 
-  high_resolution_clock::time_point t2 = high_resolution_clock::now();
-  duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.1 time: %lf\n", time_span);
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 1 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   /* touch l_grad_output */
@@ -1006,7 +1067,8 @@ at::Tensor mlp_sparse_update(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.2 time: %lf\n", time_span);
+  printf("Section 2 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   /* touch C */
@@ -1019,7 +1081,8 @@ at::Tensor mlp_sparse_update(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.3 time: %lf\n", time_span);
+  printf("Section 3 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   /* init sparse C */
@@ -1027,6 +1090,12 @@ at::Tensor mlp_sparse_update(
 
   unsigned int *colptr = (unsigned int *)libxsmm_aligned_malloc(
           (K + 1) * sizeof(unsigned int), 64);
+
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 4 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  t1 = high_resolution_clock::now();
 
   colptr[0] = 0;
 
@@ -1051,7 +1120,8 @@ at::Tensor mlp_sparse_update(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.4 time: %lf\n", time_span);
+  printf("Section 5 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   for (int l_k = 0; l_k < K; l_k++) {
@@ -1060,7 +1130,8 @@ at::Tensor mlp_sparse_update(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.5 time: %lf\n", time_span);
+  printf("Section 6 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   unsigned int *rowidx = (unsigned int *)libxsmm_aligned_malloc(nnz * sizeof(unsigned int), 64);
@@ -1082,7 +1153,8 @@ at::Tensor mlp_sparse_update(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.6 time: %lf\n", time_span);
+  printf("Section 7 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   unsigned int **c_colptr = (unsigned int **)libxsmm_aligned_malloc(
@@ -1101,7 +1173,8 @@ at::Tensor mlp_sparse_update(
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
-  printf("Section 1.7 time: %lf\n", time_span);
+  printf("Section 8 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
   BlockSpMatStep1(K, C, KB, CB, colptr, rowidx, c_colptr, nnzb);
@@ -1120,8 +1193,8 @@ at::Tensor mlp_sparse_update(
   time_span = duration_cast<duration<double>>(t2 - t1);
   //duration<double> total_time = duration_cast<duration<double>>(0);
   //total_time += time_span;
-  printf("Section 1 time: %lf\n", time_span);
-
+  printf("Section 9 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
   // Update kernels
   float alpha = 1.0;
@@ -1150,7 +1223,8 @@ at::Tensor mlp_sparse_update(
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
   //total_time += time_span;
-  printf("Section 2 time: %lf(kernel creation)\n", time_span);
+  printf("Section 10 time: %lf(kernel creation)\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
 
 
 t1 = high_resolution_clock::now();
@@ -1174,10 +1248,17 @@ int k, n, c;
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
   //total_time += time_span;
-  printf("Section 3 time: %lf(kernel execution)\n", time_span);
+  printf("Section 11 time: %lf(kernel execution)\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
 
   t1 = high_resolution_clock::now();
+
   auto grad_weight_temp = grad_weight.permute({1, 2, 0, 3}).reshape({C,K});
+
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  printf("Section 12 time: %lf\n", time_span);
+  t1 = high_resolution_clock::now();
 
   /* Convert back to grad_weight */
   int l_cc;
@@ -1200,8 +1281,9 @@ int k, n, c;
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
   //total_time += time_span;
-  printf("Section 4 time: %lf\n", time_span);
-  //printf("Total time: %lf\n", total_time);
+  printf("Section 13 time: %lf\n", time_span);
+  total_time = total_time + duration_cast<duration<double>>(t2 - t1);
+  printf("Total time: %lf\n", total_time);
 
   return grad_weight_temp.reshape({nbc, bc, nbk, bk}).permute({2, 0, 1, 3});
 }
