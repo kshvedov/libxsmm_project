@@ -1096,13 +1096,19 @@ at::Tensor mlp_sparse_update(
   //██████████████████████
   //###FLAT POINTER###
   //██████████████████████
+  //float * fp_temp = NULL;
+  //int temp_i = 0;
+  //int temp_j = 0;
   for (int l_n = 0; l_n < N / NB; ++l_n) {
       for (int l_c = 0; l_c < C / CB; ++l_c) {
           for (int l_nn = 0; l_nn < NB / nb; ++l_nn) {
               for (int l_cc = 0; l_cc < CB; ++l_cc) {
                   float * flat_ptr = (float*)input[l_n][l_c].data_ptr();
+                  //fp_temp = (float*)input[l_n][l_c].data_ptr();
                   for (int l_nnn = 0; l_nnn < nb; ++l_nnn) {
+                      //temp_i = l_nn * nb + l_nnn;
                       int i = l_nn * nb + l_nnn;
+                      //temp_j = l_cc;
                       int j = l_cc;
 
 /*
@@ -1113,7 +1119,8 @@ at::Tensor mlp_sparse_update(
                       LIBXSMM_VLA_ACCESS(5, l_p_input, l_n, l_c, l_nn, l_cc,
                               l_nnn, C / CB, NB / nb, CB, nb) =
                               //(float)input[l_n][l_c][i][j].item().to<float>();
-                              flat_ptr[i*NB+j];
+                              flat_ptr[i*CB+j];
+                              //fp_temp[temp_i*CB+temp_j];
                   }
               }
           }
@@ -1136,14 +1143,14 @@ at::Tensor mlp_sparse_update(
               for (int l_kk = 0; l_kk < KB; ++l_kk) {
                 float * flat_ptr = (float*)grad_output.data_ptr();
                   for (int l_nnn = 0; l_nnn < nb; ++l_nnn) {
-                      int depth = ((K/KB)-1) * KB + KB;
+                      //int depth = ((K/KB)-1) * KB + KB;
                       int i = l_n * NB + l_nn * nb + l_nnn;
                       int j = l_k * KB + l_kk;
 
                       LIBXSMM_VLA_ACCESS(5, l_p_grad_output, l_n, l_k, l_nn, l_kk,
                               l_nnn, K / KB, NB / nb, KB, nb) =
                               //(float)grad_output[i][j].item().to<float>();
-                              flat_ptr[i*depth + j];
+                              flat_ptr[i*KB + j];
                   }
               }
           }
@@ -1351,6 +1358,7 @@ int k, n, c;
   t1 = high_resolution_clock::now();
 
   /* Convert back to grad_weight */
+  //printf("K: %d KB: %d K/KB: %d\n", K, KB, K/KB);
   int l_cc;
   for (int l_k = 0; l_k < K/KB; ++l_k) {
       for (int l_c = 0; l_c < C/CB; ++l_c) {
@@ -1359,10 +1367,19 @@ int k, n, c;
               int colstart = c_colptr[blk_idx][l_kk];
               int colend = c_colptr[blk_idx][l_kk + 1];
               k = l_k * KB + l_kk;
+
+              float * flat_pointer = (float*)grad_weight_temp.data_ptr();
+
               for (int i = colstart; i < colend; ++i) {
                   l_cc = c_rowidx[blk_idx][i];
                   c = l_c * CB + l_cc;
-                  grad_weight_temp.index_put_({c, k}, c_values[blk_idx][i]);
+
+                  //printf("flat: %lf\n", flat_pointer[c*K + k]);
+
+                  //grad_weight_temp.index_put_({c, k}, c_values[blk_idx][i]);
+                  flat_pointer[c*K + k] = c_values[blk_idx][i];
+                  //printf("C: %d K: %d c_value: %lf\n", c, k, c_values[blk_idx][i]);
+                  //printf("flat: %lf c_value: %lf\n", flat_pointer[c*K + k], c_values[blk_idx][i]);
               }
           }
       }
