@@ -410,6 +410,10 @@ at::Tensor mlp_sparse_forward(
   // int nbc_max = 0;
   // int bk_max = 0;
   // int bc_max = 0;
+
+  //██████████████████████
+  //###FLAT POINTER###
+  //██████████████████████
   for (l_k = 0; l_k < K; l_k++) {
       colptr[l_k + 1] = 0;
       float * flat_ptr = (float*)weight.data_ptr();
@@ -741,23 +745,49 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
   total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
   // Converting A to 5 dim
+  int i_max = 0;
+  int j_max = 0;
   int aa = 0;
+  //██████████████████████
+  //###FLAT POINTER###
+  //██████████████████████
   for (l_n = 0; l_n < N / NB; ++l_n) {
       for (l_k = 0; l_k < K / KB; ++l_k) {
           for (l_nn = 0; l_nn < NB / nb; ++l_nn) {
               for (l_kk = 0; l_kk < KB; ++l_kk) {
+                  float * flat_ptr = (float*)grad_output.data_ptr();
                   for (l_nnn = 0; l_nnn < nb; ++l_nnn) {
+                      int depth = ((K/KB)-1) * KB + KB;
                       int i = l_n * NB + l_nn * nb + l_nnn;
+                      //printf("l_n: %d NB: %d l_nn: %d nb: %d l_nnn: %d\n", l_n, NB, l_nn, nb, l_nnn);
                       int j = l_k * KB + l_kk;
+                      // printf("l_k: %d KB: %d l_kk: %d\n", l_k, KB, l_kk);
 
+                      // if (i > i_max) {i_max = i;}
+                      // if (j > j_max) {j_max = j;}
                       // printf("accessing index i, j: (%d, %d, %d, %d)\n", l_n, l_c, i, j);
+                      //printf("accessing through - i: %d j: %d\n", i, j);
+                      
+                      // if ((float)grad_output[i][j].item().to<float>() != flat_ptr[i*depth + j])
+                      // {
+                      //   printf("TERMINAL ERROR!\n");
+                      //   printf("%d\n", depth);
+                      //   printf("%lf vs %lf\n", (float)grad_output[i][j].item().to<float>(), flat_ptr[i*depth + j]);
+                      // }
                       LIBXSMM_VLA_ACCESS(5, l_p_A, l_n, l_k, l_nn, l_kk,
-                              l_nnn, K / KB, NB / nb, KB, nb) = (float)grad_output[i][j].item().to<float>();
+                              l_nnn, K / KB, NB / nb, KB, nb) =
+                              //(float)grad_output[i][j].item().to<float>();
+                              flat_ptr[i*depth + j];
                   }
               }
           }
       }
   }
+  // printf("MAX - i: %d j: %d\n", i_max, j_max);
+  // printf("N: %d NB: %d N/NB: %d\n", N, NB, N/NB);
+  // printf("K: %d KB: %d K/KB: %d\n", K, KB, K/KB);
+  // printf("NB: %d nb: %d NB/nb: %d\n", NB, nb, NB/nb);
+  // printf("KB: %d nb: %d\n", KB, nb);
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
@@ -804,10 +834,19 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
   t1 = high_resolution_clock::now();
 
   colptr[0] = 0;
+  float * flat_ptr_s4 = (float*)weight_transpose.data_ptr();
+  //██████████████████████
+  //###FLAT POINTER###
+  //██████████████████████
   for (l_c = 0; l_c < C; l_c++) {
       colptr[l_c + 1] = 0;
       for (l_k = 0; l_k < K; l_k++) {
-          tmp = (float)weight_transpose[l_k][l_c].item().to<float>();
+          //tmp = (float)weight_transpose[l_k][l_c].item().to<float>();
+          tmp = flat_ptr_s4[l_c*K + l_k];
+          // if ((float)weight_transpose[l_k][l_c].item().to<float>() != flat_ptr_s4[l_c*K + l_k])
+          // {
+          //   printf("Critical ERROR!\n");
+          // }
           if (tmp == 0.0) {}
           else {
               nnz++;
@@ -1087,18 +1126,24 @@ at::Tensor mlp_sparse_update(
   total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
 
+  //██████████████████████
+  //###FLAT POINTER###
+  //██████████████████████
   /* touch l_grad_output */
   for (int l_n = 0; l_n < N / NB; ++l_n) {
       for (int l_k = 0; l_k < K / KB; ++l_k) {
           for (int l_nn = 0; l_nn < NB / nb; ++l_nn) {
               for (int l_kk = 0; l_kk < KB; ++l_kk) {
+                float * flat_ptr = (float*)grad_output.data_ptr();
                   for (int l_nnn = 0; l_nnn < nb; ++l_nnn) {
+                      int depth = ((K/KB)-1) * KB + KB;
                       int i = l_n * NB + l_nn * nb + l_nnn;
                       int j = l_k * KB + l_kk;
 
                       LIBXSMM_VLA_ACCESS(5, l_p_grad_output, l_n, l_k, l_nn, l_kk,
                               l_nnn, K / KB, NB / nb, KB, nb) =
-                              (float)grad_output[i][j].item().to<float>();
+                              //(float)grad_output[i][j].item().to<float>();
+                              flat_ptr[i*depth + j];
                   }
               }
           }
@@ -1138,15 +1183,20 @@ at::Tensor mlp_sparse_update(
   t1 = high_resolution_clock::now();
 
   colptr[0] = 0;
-
+  //██████████████████████
+  //###FLAT POINTER###
+  //██████████████████████
   for (int l_k = 0; l_k < K; l_k++) {
       colptr[l_k + 1] = 0;
+      float * flat_ptr = (float*)weight.data_ptr();
       for (int l_c = 0; l_c < C; l_c++) {
+          int depth = C/bc;
           int nbk_idx = l_k / bk;
           int nbc_idx = l_c / bc;
           int bk_idx = l_k % bk;
           int bc_idx = l_c % bc;
-          float tmp = (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>();
+          //float tmp = (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>();
+          float tmp = flat_ptr[nbk_idx * (depth*bc*bk) + nbc_idx * (bc*bk) + bc_idx * bk + bk_idx];
           if (tmp == 0.0) {
             // pass
           }
