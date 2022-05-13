@@ -79,8 +79,8 @@ def PBS(count, total, name = ""):
 if __name__ == "__main__":
     print("Loading Data")
     t = time.perf_counter()
-    data = np.load("/root/imdb_datasets/IMDB_8k_1024.npz")
-    #data = np.load("/home/kshvedov/imdb_datasets/IMDB_8k_1024.npz")
+    #data = np.load("/root/imdb_datasets/IMDB_8k_1024.npz")
+    data = np.load("/home/kshvedov/imdb_datasets/IMDB_8k_1024.npz")
     #data = np.load("/root/imdb_datasets/IMDB_32k_8192.npz")
     print(f"Time to load: {time.perf_counter()-t:.4f}s")
     print("Getting Data")

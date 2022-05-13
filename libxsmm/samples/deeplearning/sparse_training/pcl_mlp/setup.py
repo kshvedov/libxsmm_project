@@ -6,10 +6,10 @@ from torch.utils.cpp_extension import CppExtension, BuildExtension
 #LIBXSMM_ROOT_PATH="/home/kaotixs/libxsmm_project/libxsmm/"
 
 # Azure
-#LIBXSMM_ROOT_PATH="/home/kshvedov/libxsmm_project/libxsmm/"
+LIBXSMM_ROOT_PATH="/home/kshvedov/libxsmm_project/libxsmm/"
 
 # PC
-LIBXSMM_ROOT_PATH="/root/libxsmm_project/libxsmm/"
+#LIBXSMM_ROOT_PATH="/root/libxsmm_project/libxsmm/"
 print("██████████████████████████████████████████████████████████████████\n"*20)
 t = input("OG?")
 
