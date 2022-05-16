@@ -351,6 +351,12 @@ at::Tensor mlp_sparse_forward(
 
                          //(float)input[l_n][l_c][i][j].item().to<float>();
                          flat_ptr[i*NB+j];
+                         
+                      // Test Passed
+                      // if (flat_ptr[i*NB+j] != (float)input[l_n][l_c][i][j].item().to<float>())
+                      // {
+                      //   printf("ERROR! STOP! %lf - %lf\n", flat_ptr[i*NB+j], (float)input[l_n][l_c][i][j].item().to<float>());
+                      // }
                          // (float)input_[l_n * NB + i][l_c * CB + j].item().to<float>();
                     aa++;
                   }
@@ -439,6 +445,8 @@ at::Tensor mlp_sparse_forward(
           // tmp = (float)weight[l_k][l_c].item().to<float>();
           //tmp = (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>();
           tmp = flat_ptr[nbk_idx * (depth*bc*bk) + nbc_idx * (bc*bk) + bc_idx * bk + bk_idx];
+          
+          // Test Passed
           // if (flat_ptr[nbk_idx * (depth*bc*bk) + nbc_idx * (bc*bk) + bc_idx * bk + bk_idx] !=
           //     (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>())
           //     {printf("DONT MATCH!\n");}
@@ -542,7 +550,7 @@ at::Tensor mlp_sparse_forward(
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
   //total_time += time_span;
-  printf("Section 8 time: %lf\n", time_span);
+  printf("Section 8 time: %lf (kernel creation)\n", time_span);
   total_time = total_time + duration_cast<duration<double>>(t2 - t1);
   t1 = high_resolution_clock::now();
   // Execute kernels amoung threads
@@ -566,15 +574,17 @@ at::Tensor mlp_sparse_forward(
 t2 = high_resolution_clock::now();
 time_span = duration_cast<duration<double>>(t2 - t1);
 //total_time += time_span;
-printf("Section 9 time: %lf (kernel creation)\n", time_span);
+printf("Section 9 time: %lf (kernel execution)\n", time_span);
 total_time = total_time + duration_cast<duration<double>>(t2 - t1);
 
 t1 = high_resolution_clock::now();
-/* Why doesn't this work?
+
+int max_j = 0;
+int max_i = 0;
+//* Why doesn't this work? Doesnt work because no privates!!! XD --> works with private(l_n, l_k, l_nn)
 #ifdef _OPENMP
-#   pragma omp parallel for LIBXSMM_OPENMP_COLLAPSE(2)
+#   pragma omp parallel for LIBXSMM_OPENMP_COLLAPSE(2) private(l_n, l_k, l_nn)
 #endif
-*/
   for (l_n = 0; l_n < N / NB; ++l_n) {
       for (l_k = 0; l_k < K / KB; ++l_k) {
           int offset = (l_n * K / KB + l_k) * NB * KB;
@@ -582,6 +592,8 @@ t1 = high_resolution_clock::now();
           // Block Grid
           int i_blk_offset = l_k * KB;
           int j_blk_offset = l_n * NB;
+
+          float * flat_pointer = (float*)_output.data_ptr();
           for (l_nn = 0; l_nn < NB * KB; ++l_nn) {
               // Subblock grid
               // blocks are sized 4x64x16
@@ -592,16 +604,30 @@ t1 = high_resolution_clock::now();
               int j_big_offset = l_nn / (nb * NB);;
               int j = j_small_offset + (j_big_offset * nb);
 
-              _output.index_put_({j_blk_offset + j, i_blk_offset + i}, l_C[offset + l_nn]);
+              //if (i_blk_offset + i > max_i) { max_i = i_blk_offset + i;}
+		          //if (j_blk_offset + j > max_j) { max_j = j_blk_offset + j;}
+
+              //_output.index_put_({j_blk_offset + j, i_blk_offset + i}, l_C[offset + l_nn]);
+              flat_pointer[(j_blk_offset+j)*K + i_blk_offset+i] = l_C[offset + l_nn];
+              //Passed Test
+              //if (flat_pointer[(j_blk_offset+j)*K + i_blk_offset+i] != l_C[offset + l_nn])
+              //{printf("ERROR: %lf - %lf\n", flat_pointer[(j_blk_offset+j)*K + i_blk_offset+i], l_C[offset + l_nn]);}
+              //getchar();
           }
       }
   }
+
+  // printf("nb: %d\n", nb);
+  // printf("N: %d NB: %d N/NB: %d\n", N, NB, N/NB);
+  // printf("K: %d KB: %d K/KB: %d\n", K, KB, K/KB);
+  // printf("i: %d j: %d\n", max_i, max_j);
+  // getchar();
 
   auto output = _output.reshape({N, K});
 
 t2 = high_resolution_clock::now();
 time_span = duration_cast<duration<double>>(t2 - t1);
-printf("Section 10 time: %lf (kernel execution)\n", time_span);
+printf("Section 10 time: %lf\n", time_span);
 total_time = total_time + duration_cast<duration<double>>(t2 - t1);
 t1 = high_resolution_clock::now();
 
@@ -768,6 +794,7 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
                       // printf("accessing index i, j: (%d, %d, %d, %d)\n", l_n, l_c, i, j);
                       //printf("accessing through - i: %d j: %d\n", i, j);
                       
+                      // Test Passed
                       // if ((float)grad_output[i][j].item().to<float>() != flat_ptr[i*depth + j])
                       // {
                       //   printf("TERMINAL ERROR!\n");
@@ -783,6 +810,7 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
           }
       }
   }
+  // getchar();
   // printf("MAX - i: %d j: %d\n", i_max, j_max);
   // printf("N: %d NB: %d N/NB: %d\n", N, NB, N/NB);
   // printf("K: %d KB: %d K/KB: %d\n", K, KB, K/KB);
@@ -838,14 +866,23 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
   //██████████████████████
   //###FLAT POINTER###
   //██████████████████████
+  //printf("C: %d K: %d\n", C, K);
   for (l_c = 0; l_c < C; l_c++) {
       colptr[l_c + 1] = 0;
       for (l_k = 0; l_k < K; l_k++) {
           //tmp = (float)weight_transpose[l_k][l_c].item().to<float>();
           tmp = flat_ptr_s4[l_c*K + l_k];
+
+          //Test Passed
           // if ((float)weight_transpose[l_k][l_c].item().to<float>() != flat_ptr_s4[l_c*K + l_k])
           // {
           //   printf("Critical ERROR!\n");
+          // }
+
+          // Did not pass, Confused. As though not transposed, just tensor approached differently
+          // if ((float)weight_transpose[l_k][l_c].item().to<float>() != flat_ptr_s4[l_k*C + l_c])
+          // {
+          //   printf("Critical ERROR! SHOULD BE THE CORRECT ONE\n");
           // }
           if (tmp == 0.0) {}
           else {
@@ -855,6 +892,7 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
           l_B[l_c * K + l_k] = (float)tmp;
       }
   }
+  //getchar();
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
@@ -989,6 +1027,9 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
   // Write results back to output
   // nbn nbc bn bc
 
+  //int max_i = 0;
+  //int max_j = 0;
+
   for (l_n = 0; l_n < N / NB; ++l_n) {
       for (l_c = 0; l_c < C / CB; ++l_c) {
           int offset = (l_n * C / CB + l_c) * NB * CB;
@@ -996,6 +1037,11 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
           // Block Grid
           int i_blk_offset = l_c * CB;
           int j_blk_offset = l_n * NB;
+
+          //printf("offset: %d i_blk_offset: %d j_blk_offset: %d \n", offset, i_blk_offset, j_blk_offset);
+
+          float * flat_pointer = (float*)grad_input_temp.data_ptr();
+
           for (l_nn = 0; l_nn < NB * CB; ++l_nn) {
               // Subblock grid
               // blocks are sized 4x64x16
@@ -1005,10 +1051,29 @@ RECORD_FUNCTION("xsmm_mm_bwdupd", std::vector<c10::IValue>({grad_output, weight}
               int j_big_offset = l_nn / (nb * NB);;
               int j = j_small_offset + (j_big_offset * nb);
 
-              grad_input_temp.index_put_({j_blk_offset + j, i_blk_offset + i}, l_C[offset + l_nn]);
+              //printf("i: %d j_small: %d j_big: %d j: %d\n", i, j_small_offset, j_blk_offset, j);
+
+              //printf("i: %d j: %d\n", j_blk_offset + j, i_blk_offset + i);
+              //if (i_blk_offset + i > max_i) { max_i = i_blk_offset + i;}
+              //if (j_blk_offset + j > max_j) { max_j = j_blk_offset + j;}
+              //grad_input_temp.index_put_({j_blk_offset + j, i_blk_offset + i}, l_C[offset + l_nn]);
+              //grad_input_temp.index_put_({j_blk_offset + j, i_blk_offset + i}, l_C[offset + l_nn]);
+              // flat_pointer[(j_blk_offset+j)*C + i_blk_offset+i] = l_C[offset + l_nn];
+              // printf("%d - %d\n", (j_blk_offset+j)*C + i_blk_offset+i, offset + l_nn);
+              // getchar();
+              //Passsed Test
+              //if (flat_pointer[(j_blk_offset+j)*C + i_blk_offset+i] != l_C[offset + l_nn])
+              //{printf("ERROR: %lf - %lf\n", flat_pointer[(j_blk_offset+j)*C + i_blk_offset+i], l_C[offset + l_nn]);}
+              //getchar();
           }
       }
   }
+  // printf("nb: %d\n", nb);
+  // printf("N: %d NB: %d N/NB: %d\n", N, NB, N/NB);
+  // printf("C: %d CB: %d C/CB: %d\n", C, CB, C/CB);
+  // printf("i: %d j: %d\n", max_i, max_j);
+  // getchar();
+
 
   t2 = high_resolution_clock::now();
   time_span = duration_cast<duration<double>>(t2 - t1);
@@ -1121,6 +1186,12 @@ at::Tensor mlp_sparse_update(
                               //(float)input[l_n][l_c][i][j].item().to<float>();
                               flat_ptr[i*CB+j];
                               //fp_temp[temp_i*CB+temp_j];
+                              
+                              // Test complete
+                              // if ((float)input[l_n][l_c][i][j].item().to<float>() != flat_ptr[i*CB+j])
+                              // {
+                              //   printf("Error! %lf - %lf\n", (float)input[l_n][l_c][i][j].item().to<float>(), flat_ptr[i*CB+j]);
+                              // }
                   }
               }
           }
@@ -1143,7 +1214,7 @@ at::Tensor mlp_sparse_update(
               for (int l_kk = 0; l_kk < KB; ++l_kk) {
                 float * flat_ptr = (float*)grad_output.data_ptr();
                   for (int l_nnn = 0; l_nnn < nb; ++l_nnn) {
-                      //int depth = ((K/KB)-1) * KB + KB;
+                      int depth = ((K/KB)-1) * KB + KB;
                       int i = l_n * NB + l_nn * nb + l_nnn;
                       int j = l_k * KB + l_kk;
 
@@ -1151,6 +1222,13 @@ at::Tensor mlp_sparse_update(
                               l_nnn, K / KB, NB / nb, KB, nb) =
                               //(float)grad_output[i][j].item().to<float>();
                               flat_ptr[i*KB + j];
+                              
+                              // Test complete
+                              // if ((float)grad_output[i][j].item().to<float>() != flat_ptr[i*depth+j])
+                              // {
+                              //   printf("Error! %lf - %lf\n", (float)grad_output[i][j].item().to<float>(), flat_ptr[i*depth+j]);
+                              //   exit(0);
+                              // }
                   }
               }
           }
@@ -1204,6 +1282,12 @@ at::Tensor mlp_sparse_update(
           int bc_idx = l_c % bc;
           //float tmp = (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>();
           float tmp = flat_ptr[nbk_idx * (depth*bc*bk) + nbc_idx * (bc*bk) + bc_idx * bk + bk_idx];
+          
+          // Test complete
+          // if ((float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>() != tmp)
+          // {
+          //   printf("Error! %lf - %lf\n", (float)weight[nbk_idx][nbc_idx][bc_idx][bk_idx].item().to<float>(), tmp);
+          // }
           if (tmp == 0.0) {
             // pass
           }
@@ -1350,6 +1434,14 @@ int k, n, c;
 
   t1 = high_resolution_clock::now();
   
+  // printf("dims 0: %d 1: %d 2: %d 3: %d\n", grad_weight.sizes()[0], grad_weight.sizes()[1],
+  //                                         grad_weight.sizes()[2], grad_weight.sizes()[3]);
+  // auto grad_weight_temp = grad_weight.permute({1, 2, 0, 3});
+  // printf("dims 0: %d 1: %d 2: %d 3: %d\n", grad_weight_temp.sizes()[0], grad_weight_temp.sizes()[1],
+  //                                         grad_weight_temp.sizes()[2], grad_weight_temp.sizes()[3]);
+  // grad_weight_temp = grad_weight_temp.reshape({C,K});
+  // printf("dims 0: %d 1: %d 2: %d 3: %d\n", grad_weight_temp.sizes()[0], grad_weight_temp.sizes()[1],
+  //                                         grad_weight_temp.sizes()[2], grad_weight_temp.sizes()[3]);
   auto grad_weight_temp = grad_weight.permute({1, 2, 0, 3}).reshape({C,K});
 
   t2 = high_resolution_clock::now();
@@ -1377,6 +1469,12 @@ int k, n, c;
                   //printf("flat: %lf\n", flat_pointer[c*K + k]);
 
                   //grad_weight_temp.index_put_({c, k}, c_values[blk_idx][i]);
+                  
+                  // Test complete
+                  // if (flat_pointer[c*K + k] != c_values[blk_idx][i])
+                  // {
+                  //   printf("Error! %lf - %lf\n", flat_pointer[c*K + k], c_values[blk_idx][i]);
+                  // }
                   flat_pointer[c*K + k] = c_values[blk_idx][i];
                   //printf("C: %d K: %d c_value: %lf\n", c, k, c_values[blk_idx][i]);
                   //printf("flat: %lf c_value: %lf\n", flat_pointer[c*K + k], c_values[blk_idx][i]);

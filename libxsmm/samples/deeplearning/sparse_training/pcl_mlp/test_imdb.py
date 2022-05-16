@@ -77,11 +77,12 @@ def PBS(count, total, name = ""):
     return (f"{name}[{bar}] {count}/{total} --> {perc}%")
 
 if __name__ == "__main__":
+    print(torch.cuda.is_available())
     print("Loading Data")
     t = time.perf_counter()
     #data = np.load("/root/imdb_datasets/IMDB_8k_1024.npz")
-    data = np.load("/home/kshvedov/imdb_datasets/IMDB_8k_1024.npz")
-    #data = np.load("/root/imdb_datasets/IMDB_32k_8192.npz")
+    #data = np.load("/home/kshvedov/imdb_datasets/IMDB_8k_1024.npz")
+    data = np.load("/root/imdb_datasets/IMDB_32k_8192.npz")
     print(f"Time to load: {time.perf_counter()-t:.4f}s")
     print("Getting Data")
     t = time.perf_counter()
@@ -117,9 +118,9 @@ if __name__ == "__main__":
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=1024//4, shuffle=True, num_workers=2)
     testloader = torch.utils.data.DataLoader(testset, batch_size=1024//4, shuffle=True, num_workers=2)    
     
-    use_sparse = True
-    #model = ThreeFeedforward(8192, 8192, use_sparse_kernels=use_sparse)
-    model = ThreeFeedforward(1024, 1024, use_sparse_kernels=use_sparse)
+    use_sparse = False
+    model = ThreeFeedforward(8192, 8192, use_sparse_kernels=use_sparse)
+    #model = ThreeFeedforward(1024, 1024, use_sparse_kernels=use_sparse)
 
     # Prune weight
     #if use_sparse:
@@ -140,6 +141,7 @@ if __name__ == "__main__":
     model.train()
     epoch_count = 20
 
+    print("Model ready, starting timer")
     ts = time.perf_counter()
     for epoch in range(epoch_count):
         train_loss = 0
