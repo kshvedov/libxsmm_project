@@ -296,7 +296,7 @@ class XsmmLinear(nn.Module):
 
         # Change threshold to a smarter value
         #use_sparse_kernels = True if sparsity > 0.6 else False
-        use_sparse_kernels = False
+        use_sparse_kernels = True
         
         output =  XsmmFC.apply(input, wtensor, btensor, self.xsmm_handle, use_sparse_kernels)
         if not self.output_stays_blocked:

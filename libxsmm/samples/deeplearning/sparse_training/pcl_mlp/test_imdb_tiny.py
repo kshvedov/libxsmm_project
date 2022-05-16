@@ -25,7 +25,7 @@ class ThreeFeedforward(torch.nn.Module):
         super(ThreeFeedforward, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.fc0 = torch.nn.Linear(self.input_size, self.hidden_size)
+        #self.fc0 = torch.nn.Linear(self.input_size, self.hidden_size)
         if use_sparse_kernels:
             self.fc1 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
             #self.fc2 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
@@ -42,10 +42,10 @@ class ThreeFeedforward(torch.nn.Module):
 
     def forward(self, x):
         #hidden = self.fc0(torch.flatten(x, start_dim=1))
-        hidden = self.fc0(x)
-        hidden = F.relu(hidden)
+        #hidden = self.fc0(x)
+        #hidden = F.relu(hidden)
 
-        hidden = self.fc1(hidden)
+        hidden = self.fc1(x)
         hidden = F.relu(hidden)
         #hidden = self.droput(hidden)
         # hidden = self.fc2(hidden)
@@ -82,8 +82,8 @@ if __name__ == "__main__":
     t = time.perf_counter()
     #data = np.load("/root/imdb_datasets/IMDB_8k_1024.npz")
     #data = np.load("/home/kshvedov/imdb_datasets/IMDB_8k_1024.npz")
-    #data = np.load("/root/imdb_datasets/IMDB_small_32k_16384.npz")
-    data = np.load("/root/imdb_datasets/IMDB_small_32k_8192.npz")
+    data = np.load("/root/imdb_datasets/IMDB_small_32k_16384.npz")
+    #data = np.load("/root/imdb_datasets/IMDB_small_32k_8192.npz")
     #data = np.load("/root/imdb_datasets/IMDB_small_32k_4096.npz")
     #data = np.load("/root/imdb_datasets/IMDB_small_32k_32768.npz")
     print(f"Time to load: {time.perf_counter()-t:.4f}s")
@@ -124,15 +124,15 @@ if __name__ == "__main__":
     #testloader = torch.utils.data.DataLoader(testset, batch_size=1024//4, shuffle=True, num_workers=2)    
     
     use_sparse = True
-    model = ThreeFeedforward(8192, 8192, use_sparse_kernels=use_sparse)
+    #model = ThreeFeedforward(8192, 8192, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(4096, 4096, use_sparse_kernels=use_sparse)
-    #model = ThreeFeedforward(16384, 16384, use_sparse_kernels=use_sparse)
+    model = ThreeFeedforward(16384, 16384, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(32768, 32768, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(1024, 1024, use_sparse_kernels=use_sparse)
 
     # Prune weight
     #if use_sparse:
-    prune_w = 0.8
+    prune_w = 0.95
     prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
     #prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
     #prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
