@@ -21,17 +21,20 @@ from sklearn.preprocessing import LabelBinarizer as LB
 # Initial Feed forward class --> Simple test
 # Torch version works, 
 class ThreeFeedforward(torch.nn.Module):
-    def __init__(self, input_size, hidden_size, use_sparse_kernels=False):
+    def __init__(self, input_size, hidden_size, l_c, use_sparse_kernels=False):
         super(ThreeFeedforward, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         #self.fc0 = torch.nn.Linear(self.input_size, self.hidden_size)
+        self.layers = []
         if use_sparse_kernels:
-            self.fc1 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
+            for i in range(l_c):
+                self.layers.append(pcl_mlp.XsmmLinear(hidden_size, hidden_size))
             # self.fc2 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
             # self.fc3 = pcl_mlp.XsmmLinear(hidden_size, hidden_size)
         else:
-            self.fc1 = torch.nn.Linear(self.hidden_size, self.hidden_size)
+            for i in range(l_c):
+                self.layers.append(torch.nn.Linear(self.hidden_size, self.hidden_size))
             # self.fc2 = torch.nn.Linear(self.hidden_size, self.hidden_size)
             # self.fc3 = torch.nn.Linear(self.hidden_size, self.hidden_size)
         #self.relu = torch.nn.ReLU()
@@ -44,9 +47,10 @@ class ThreeFeedforward(torch.nn.Module):
         #hidden = self.fc0(torch.flatten(x, start_dim=1))
         #hidden = self.fc0(x)
         #hidden = F.relu(hidden)
-
-        hidden = self.fc1(x)
-        hidden = F.relu(hidden)
+        hidden = x
+        for item in self.layers:
+            hidden = item(hidden)
+            hidden = F.relu(hidden)
         #hidden = self.droput(hidden)
         # hidden = self.fc2(hidden)
         # hidden = F.relu(hidden)
@@ -124,7 +128,7 @@ if __name__ == "__main__":
     #testloader = torch.utils.data.DataLoader(testset, batch_size=1024//4, shuffle=True, num_workers=2)    
     
     use_sparse = False
-    model = ThreeFeedforward(8192, 8192, use_sparse_kernels=use_sparse)
+    model = ThreeFeedforward(8192, 8192, 10,  use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(4096, 4096, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(16384, 16384, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(32768, 32768, use_sparse_kernels=use_sparse)
@@ -132,10 +136,13 @@ if __name__ == "__main__":
 
     # Prune weight
     #if use_sparse:
+    print(model)
     prune_w = 0.95
-    prune.random_unstructured(model.fc1, name="weight", amount=prune_w)
+    for i, item in enumerate(model.layers):
+        prune.random_unstructured(item, name="weight", amount=prune_w)
     #prune.random_unstructured(model.fc2, name="weight", amount=prune_w)
     #prune.random_unstructured(model.fc3, name="weight", amount=prune_w)
+    print(model)
 
     criterion = torch.nn.BCELoss()
     #criterion = torch.nn.CrossEntropyLoss()
