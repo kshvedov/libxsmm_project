@@ -136,15 +136,21 @@ if __name__ == "__main__":
                 #Loss calculated
                 loss = criterion(y_pred, labels)
 
+                #print(loss.item())
+                #input()
+
                 loss.backward()
                 optimizer.step()
                 te_epoch = time.perf_counter()
             
                 # Backward pass
+                print(loss.item())
+                print(len(inputs))
+                #input()
                 train_loss += loss.item() * len(inputs)
                 tot_time += te_epoch - ts_epoch
                 print(f"{PBS(i, tot_len, 'Training Epoch')}, tot loss: {train_loss:.5f}, time:{tot_time}", end = "\r")
-
+                #input()
                 #print(f'Batch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/(i+1)}, duration: {tot_time}s')
         print()
 
@@ -178,6 +184,9 @@ if __name__ == "__main__":
         print(f'Epoch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/len(trainloader.sampler)}, duration: {tot_time}s')
         f = open("temp_results.txt", "a")
         print(f'Epoch {epoch}: tot train loss: {train_loss}, train loss: {train_loss/len(trainloader.sampler)}, duration: {tot_time}s', file = f)
+        f.close()
+        f = open("MNIST_0.8_sparse_results.csv", "a")
+        print(f'{epoch+1},{train_loss},{train_loss/len(trainloader.sampler)},{tot_time}s', file = f)
         f.close()
 
         te = time.perf_counter()

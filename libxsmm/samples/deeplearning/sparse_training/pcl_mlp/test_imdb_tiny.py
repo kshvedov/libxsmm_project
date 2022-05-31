@@ -123,7 +123,7 @@ if __name__ == "__main__":
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=1024//4, shuffle=True, num_workers=2)
     #testloader = torch.utils.data.DataLoader(testset, batch_size=1024//4, shuffle=True, num_workers=2)    
     
-    use_sparse = False
+    use_sparse = True
     model = ThreeFeedforward(8192, 8192, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(4096, 4096, use_sparse_kernels=use_sparse)
     #model = ThreeFeedforward(16384, 16384, use_sparse_kernels=use_sparse)
